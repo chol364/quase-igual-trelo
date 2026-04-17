@@ -1,0 +1,444 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String                @id @default(cuid())
+  name               String
+  username           String                @unique
+  email              String                @unique
+  emailVerified      DateTime?
+  image              String?
+  avatarColor        String                @default("#3b82f6")
+  passwordHash       String?
+  bio                String?
+  locale             String                @default("pt-BR")
+  timezone           String                @default("America/Sao_Paulo")
+  theme              String                @default("dark")
+  notificationsEmail Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  accounts           Account[]
+  sessions           Session[]
+  workspacesOwned    Workspace[]           @relation("WorkspaceOwner")
+  workspaceMembers   WorkspaceMember[]
+  boardsOwned        Board[]               @relation("BoardOwner")
+  boardMembers       BoardMember[]
+  boardPreferences   BoardViewPreference[]
+  cardsCreated       Card[]                @relation("CardCreator")
+  cardAssignments    CardMember[]
+  comments           Comment[]
+  attachments        Attachment[]
+  notifications      Notification[]
+  invitationsSent    Invitation[]          @relation("InvitationSender")
+  activityLogs       ActivityLog[]
+  automationRules    AutomationRule[]      @relation("AutomationAuthor")
+}
+
+model Account {
+  id                String @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Workspace {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  description     String?
+  image           String?
+  visibility      String           @default("PRIVATE")
+  ownerId         String
+  settingsJson    Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  owner           User             @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members         WorkspaceMember[]
+  boards          Board[]
+  comments        Comment[]
+  attachments     Attachment[]
+  labels          Label[]
+  customFields    CustomField[]
+  invitations     Invitation[]
+  notifications   Notification[]
+  automationRules AutomationRule[]
+  activityLogs    ActivityLog[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String    @default("MEMBER")
+  joinedAt    DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Board {
+  id                String                @id @default(cuid())
+  workspaceId       String
+  ownerId           String
+  title             String
+  slug              String
+  description       String?
+  background        String?
+  coverImage        String?
+  visibility        String                @default("WORKSPACE")
+  isFavorite        Boolean               @default(false)
+  isArchived        Boolean               @default(false)
+  sortOrder         Int                   @default(0)
+  defaultView       String                @default("KANBAN")
+  settingsJson      Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner             User                  @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members           BoardMember[]
+  preferences       BoardViewPreference[]
+  lists             List[]
+  cards             Card[]
+  labels            Label[]
+  customFields      CustomField[]
+  comments          Comment[]
+  attachments       Attachment[]
+  activityLogs      ActivityLog[]
+  customFieldValues CustomFieldValue[]
+  notifications     Notification[]
+  automationRules   AutomationRule[]
+  invitations       Invitation[]
+
+  @@unique([workspaceId, slug])
+}
+
+model BoardMember {
+  id       String   @id @default(cuid())
+  boardId  String
+  userId   String
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  board    Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+}
+
+model BoardViewPreference {
+  id        String   @id @default(cuid())
+  boardId   String
+  userId    String
+  view      String
+  filters   Json?
+  sorting   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId, view])
+}
+
+model List {
+  id          String        @id @default(cuid())
+  boardId     String
+  title       String
+  description String?
+  color       String?
+  limit       Int?
+  sortOrder   Int           @default(0)
+  isArchived  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  board       Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards       Card[]
+  activities  ActivityLog[]
+}
+
+model Card {
+  id                 String              @id @default(cuid())
+  boardId            String
+  listId             String
+  parentCardId       String?
+  createdById        String
+  title              String
+  slug               String
+  description        String?
+  status             String              @default("TODO")
+  priority           String              @default("MEDIUM")
+  sortOrder          Int                 @default(0)
+  startDate          DateTime?
+  dueDate            DateTime?
+  completedAt        DateTime?
+  reminderAt         DateTime?
+  coverImage         String?
+  coverColor         String?
+  isArchived         Boolean             @default(false)
+  isWatching         Boolean             @default(false)
+  customFieldsJson   Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  board              Board               @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  list               List                @relation(fields: [listId], references: [id], onDelete: Cascade)
+  parentCard         Card?               @relation("CardSubtasks", fields: [parentCardId], references: [id], onDelete: SetNull)
+  subtasks           Card[]              @relation("CardSubtasks")
+  createdBy          User                @relation("CardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members            CardMember[]
+  labels             CardLabel[]
+  checklists         Checklist[]
+  comments           Comment[]
+  attachments        Attachment[]
+  customFieldValues  CustomFieldValue[]
+  notifications      Notification[]
+  activityLogs       ActivityLog[]
+  automationTriggers AutomationTrigger[]
+}
+
+model CardMember {
+  id         String   @id @default(cuid())
+  cardId     String
+  userId     String
+  assignedAt DateTime @default(now())
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, userId])
+}
+
+model Label {
+  id          String    @id @default(cuid())
+  workspaceId String
+  boardId     String?
+  name        String
+  color       String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board?    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards       CardLabel[]
+}
+
+model CardLabel {
+  id      String @id @default(cuid())
+  cardId  String
+  labelId String
+  card    Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, labelId])
+}
+
+model Checklist {
+  id        String          @id @default(cuid())
+  cardId    String
+  title     String
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  card      Card            @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  items     ChecklistItem[]
+}
+
+model ChecklistItem {
+  id          String     @id @default(cuid())
+  checklistId String
+  title       String
+  description String?
+  sortOrder   Int        @default(0)
+  isCompleted Boolean    @default(false)
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  checklist   Checklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  boardId     String
+  cardId      String
+  authorId    String
+  content     String
+  mentions    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  card        Card      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  boardId     String
+  cardId      String
+  uploaderId  String
+  fileName    String
+  fileUrl     String
+  mimeType    String?
+  size        Int?
+  storageKey  String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  card        Card      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  uploader    User      @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id          String     @id @default(cuid())
+  workspaceId String?
+  boardId     String?
+  listId      String?
+  cardId      String?
+  userId      String
+  entityType  String
+  action      String
+  message     String
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board?     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  list        List?      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  card        Card?      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CustomField {
+  id          String    @id @default(cuid())
+  workspaceId String
+  boardId     String?
+  name        String
+  type        String
+  options     Json?
+  isRequired  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board?    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  values      CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id            String      @id @default(cuid())
+  customFieldId String
+  boardId       String
+  cardId        String
+  value         Json
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  customField   CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  board         Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  card          Card        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([customFieldId, cardId])
+}
+
+model Notification {
+  id          String     @id @default(cuid())
+  workspaceId String?
+  boardId     String?
+  cardId      String?
+  userId      String
+  type        String
+  title       String
+  body        String?
+  link        String?
+  isRead      Boolean    @default(false)
+  readAt      DateTime?
+  createdAt   DateTime   @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board?     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  card        Card?      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  boardId     String?
+  email       String
+  role        String    @default("MEMBER")
+  status      String    @default("PENDING")
+  token       String    @unique
+  invitedById String
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board?    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+}
+
+model AutomationRule {
+  id          String              @id @default(cuid())
+  workspaceId String
+  boardId     String?
+  createdById String
+  name        String
+  description String?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board?              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("AutomationAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  triggers    AutomationTrigger[]
+  actions     AutomationAction[]
+}
+
+model AutomationTrigger {
+  id               String         @id @default(cuid())
+  automationRuleId String
+  cardId           String?
+  type             String
+  config           Json?
+  createdAt        DateTime       @default(now())
+  rule             AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  card             Card?          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+}
+
+model AutomationAction {
+  id               String         @id @default(cuid())
+  automationRuleId String
+  type             String
+  config           Json?
+  createdAt        DateTime       @default(now())
+  rule             AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+}
