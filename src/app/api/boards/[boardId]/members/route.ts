@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth/session'
 import { MEMBER_ROLES } from '@/lib/domain/constants'
 import { canManage } from '@/lib/domain/permissions'
 import { prisma } from '@/lib/db/prisma'
+import { sendInvitationEmail } from '@/lib/notifications/invitations'
 import { createActivityLog } from '@/server/services/boards'
 
 const inviteSchema = z.object({
@@ -185,6 +186,21 @@ export async function POST(request: Request, { params }: Params) {
       invitedById: session.user.id,
     },
   })
+
+  try {
+    await sendInvitationEmail({
+      to: invitation.email,
+      role: invitation.role,
+      token: invitation.token,
+      inviterName: session.user.name,
+      workspaceName: board.workspace.name,
+      boardName: board.title,
+    })
+  } catch (error) {
+    await prisma.invitation.delete({ where: { id: invitation.id } })
+    const message = error instanceof Error ? error.message : 'Falha ao enviar e-mail de convite.'
+    return NextResponse.json({ error: message }, { status: 502 })
+  }
 
   await createActivityLog({
     workspaceId: board.workspaceId,

@@ -124,7 +124,7 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
 
     if (data.invitation) {
       await refreshMembers()
-      setInviteMessage('Convite enviado e pendente.')
+      setInviteMessage('Convite enviado por e-mail e pendente.')
     }
 
     setInviteEmail('')

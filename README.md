@@ -156,6 +156,19 @@ npm run seed
 npm run dev
 ```
 
+### Envio de convites por e-mail (Resend)
+
+Para que convites de workspace/board sejam enviados de fato por e-mail, configure no `.env`:
+
+```bash
+APP_URL=http://localhost:3000
+EMAIL_FROM=TaskFlow <onboarding@seu-dominio.com>
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+```
+
+- `APP_URL` (ou `NEXTAUTH_URL`) e usado para montar o link do convite.
+- Sem `RESEND_API_KEY` e `EMAIL_FROM`, a API de convite retorna erro de envio.
+
 ## Usuário demo do seed
 
 - `matheus@example.com`

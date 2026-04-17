@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth/session'
 import { MEMBER_ROLES } from '@/lib/domain/constants'
 import { prisma } from '@/lib/db/prisma'
+import { sendInvitationEmail } from '@/lib/notifications/invitations'
 import { assertWorkspaceAccess, createActivityLog, ensureWorkspaceMembership } from '@/server/services/boards'
 
 const postSchema = z.object({
@@ -114,6 +115,30 @@ export async function POST(request: Request, { params }: Params) {
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
     },
   })
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { name: true },
+  })
+
+  if (!workspace) {
+    await prisma.invitation.delete({ where: { id: invitation.id } })
+    return NextResponse.json({ error: 'Workspace nao encontrado.' }, { status: 404 })
+  }
+
+  try {
+    await sendInvitationEmail({
+      to: invitation.email,
+      role: invitation.role,
+      token: invitation.token,
+      inviterName: session.user.name,
+      workspaceName: workspace.name,
+    })
+  } catch (error) {
+    await prisma.invitation.delete({ where: { id: invitation.id } })
+    const message = error instanceof Error ? error.message : 'Falha ao enviar e-mail de convite.'
+    return NextResponse.json({ error: message }, { status: 502 })
+  }
 
   await createActivityLog({
     workspaceId,
