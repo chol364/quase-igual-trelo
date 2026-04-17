@@ -1,47 +1,71 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
-import { useSession } from 'next-auth/react';
+'use client'
 
-const InvitePage = () => {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const router = useRouter();
-    const { data: session } = useSession();
-    const { token } = router.query;
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 
-    useEffect(() => {
-        const acceptInvitation = async () => {
-            if (!session) {
-                // Redirect to login if not authenticated
-                router.push(`/login?callbackUrl=${encodeURIComponent(window.location.href)}`);
-                return;
-            }
+export default function InvitePage({ params }: { params: { token: string } }) {
+  const router = useRouter()
+  const { data: session, status } = useSession()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-            try {
-                const response = await fetch(`/api/invitations/accept?token=${token}`, {
-                    method: 'POST',
-                });
+  useEffect(() => {
+    const acceptInvite = async () => {
+      if (status === 'unauthenticated') {
+        router.push(`/login?callbackUrl=/invite/${params.token}`)
+        return
+      }
 
-                if (!response.ok) {
-                    throw new Error('Failed to accept invitation');
-                }
+      if (status !== 'authenticated') {
+        return
+      }
 
-                const result = await response.json();
-                alert(result.message || 'Invitation accepted successfully!');
-                router.push('/workspaces');
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        }; 
+      try {
+        const response = await fetch('/api/invitations/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: params.token }),
+        })
 
-        acceptInvitation();
-    }, [session, token, router]);
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Erro ao aceitar convite')
+        }
 
-    if (loading) return <div>Loading...</div>;
-    if (error) return <div>Error: {error}</div>;
-    return <div>Processing invitation...</div>;
-};
+        router.push('/workspaces')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro desconhecido')
+        setLoading(false)
+      }
+    }
 
-export default InvitePage;
+    acceptInvite()
+  }, [status, params.token, router])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p>Aceitando convite...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">❌ {error}</p>
+          <a href="/workspaces" className="text-blue-500 underline">
+            Voltar para workspaces
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}

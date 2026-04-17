@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { Resend } from 'resend'
 import { auth } from '@/lib/auth/session'
 import { MEMBER_ROLES } from '@/lib/domain/constants'
 import { prisma } from '@/lib/db/prisma'
@@ -80,6 +81,11 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Apenas owners podem convidar para papeis administrativos.' }, { status: 403 })
   }
 
+  const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
+  if (!workspace) return NextResponse.json({ error: 'Workspace nao encontrado.' }, { status: 404 })
+
+  const token = randomUUID()
+
   const targetUser = await prisma.user.findUnique({ where: { email: parsed.data.email } })
 
   if (targetUser) {
@@ -110,10 +116,34 @@ export async function POST(request: Request, { params }: Params) {
       email: parsed.data.email,
       role: parsed.data.role,
       invitedById: session.user.id,
-      token: randomUUID(),
+      token,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
     },
   })
+
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const invitationLink = `${process.env.NEXTAUTH_URL}/invite/${token}`
+
+    await resend.emails.send({
+      from: 'noreply@taskflow.com',
+      to: parsed.data.email,
+      subject: `${session.user.name || 'Um membro'} te convidou para ${workspace.name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+          <h2 style="color: #111;">Você foi convidado! 🎉</h2>
+          <p style="color: #333; font-size: 16px; line-height: 1.6;">${session.user.name || 'Um membro'} te convidou para participar do workspace <strong>${workspace.name}</strong>.</p>
+          <div style="margin: 32px 0; text-align: center;">
+            <a href="${invitationLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">Aceitar convite</a>
+          </div>
+          <p style="color: #666; font-size: 14px; line-height: 1.5;">Ou copie este link:<br/><a href="${invitationLink}" style="color: #2563eb;">${invitationLink}</a></p>
+          <p style="color: #999; font-size: 13px; margin-top: 24px;">Este convite expira em 7 dias.</p>
+        </div>
+      `,
+    })
+  } catch (error) {
+    console.error('Erro ao enviar email de convite:', error)
+  }
 
   await createActivityLog({
     workspaceId,
