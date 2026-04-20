@@ -1,12 +1,13 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 
 export default function InvitePage({ params }: { params: { token: string } }) {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -40,14 +41,14 @@ export default function InvitePage({ params }: { params: { token: string } }) {
       }
     }
 
-    acceptInvite()
+    void acceptInvite()
   }, [status, params.token, router])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-500"></div>
           <p>Aceitando convite...</p>
         </div>
       </div>
@@ -56,12 +57,12 @@ export default function InvitePage({ params }: { params: { token: string } }) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-red-500 mb-4">❌ {error}</p>
-          <a href="/workspaces" className="text-blue-500 underline">
+          <p className="mb-4 text-red-500">{error}</p>
+          <Link href="/workspaces" className="text-blue-500 underline">
             Voltar para workspaces
-          </a>
+          </Link>
         </div>
       </div>
     )

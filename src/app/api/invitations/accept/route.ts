@@ -50,6 +50,23 @@ export async function POST(request: Request) {
     },
   })
 
+  if (invitation.boardId) {
+    await prisma.boardMember.upsert({
+      where: {
+        boardId_userId: {
+          boardId: invitation.boardId,
+          userId: session.user.id,
+        },
+      },
+      update: { role: invitation.role },
+      create: {
+        boardId: invitation.boardId,
+        userId: session.user.id,
+        role: invitation.role,
+      },
+    })
+  }
+
   await prisma.invitation.update({
     where: { id: invitation.id },
     data: { status: 'ACCEPTED' },
