@@ -4,8 +4,8 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth/session'
 import { MEMBER_ROLES } from '@/lib/domain/constants'
 import { prisma } from '@/lib/db/prisma'
-import { sendInvitationEmail } from '@/lib/notifications/invitations'
 import { assertWorkspaceAccess, createActivityLog, ensureWorkspaceMembership } from '@/server/services/boards'
+import { deliverInvitationEmail } from '@/server/services/invitations'
 
 const postSchema = z.object({
   email: z.string().email(),
@@ -81,6 +81,10 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Apenas owners podem convidar para papeis administrativos.' }, { status: 403 })
   }
 
+  const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
+  if (!workspace) return NextResponse.json({ error: 'Workspace nao encontrado.' }, { status: 404 })
+
+  const token = randomUUID()
   const targetUser = await prisma.user.findUnique({ where: { email: parsed.data.email } })
 
   if (targetUser) {
@@ -111,34 +115,18 @@ export async function POST(request: Request, { params }: Params) {
       email: parsed.data.email,
       role: parsed.data.role,
       invitedById: session.user.id,
-      token: randomUUID(),
+      token,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
     },
   })
 
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { name: true },
+  const delivery = await deliverInvitationEmail({
+    requestUrl: request.url,
+    token,
+    recipientEmail: parsed.data.email,
+    inviterName: session.user.name,
+    workspaceName: workspace.name,
   })
-
-  if (!workspace) {
-    await prisma.invitation.delete({ where: { id: invitation.id } })
-    return NextResponse.json({ error: 'Workspace nao encontrado.' }, { status: 404 })
-  }
-
-  try {
-    await sendInvitationEmail({
-      to: invitation.email,
-      role: invitation.role,
-      token: invitation.token,
-      inviterName: session.user.name,
-      workspaceName: workspace.name,
-    })
-  } catch (error) {
-    await prisma.invitation.delete({ where: { id: invitation.id } })
-    const message = error instanceof Error ? error.message : 'Falha ao enviar e-mail de convite.'
-    return NextResponse.json({ error: message }, { status: 502 })
-  }
 
   await createActivityLog({
     workspaceId,
@@ -146,6 +134,7 @@ export async function POST(request: Request, { params }: Params) {
     entityType: 'WORKSPACE',
     action: 'workspace.invite_created',
     message: `Enviou convite para ${parsed.data.email}`,
+    metadata: delivery.delivered ? undefined : { invitationLink: delivery.invitationLink, deliveryReason: delivery.reason },
   })
 
   return NextResponse.json({
@@ -155,6 +144,11 @@ export async function POST(request: Request, { params }: Params) {
       role: invitation.role,
       status: invitation.status,
       createdAt: invitation.createdAt,
+    },
+    delivery: {
+      delivered: delivery.delivered,
+      reason: delivery.reason,
+      invitationLink: delivery.invitationLink,
     },
   })
 }

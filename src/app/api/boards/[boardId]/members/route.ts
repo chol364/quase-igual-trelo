@@ -5,8 +5,8 @@ import { auth } from '@/lib/auth/session'
 import { MEMBER_ROLES } from '@/lib/domain/constants'
 import { canManage } from '@/lib/domain/permissions'
 import { prisma } from '@/lib/db/prisma'
-import { sendInvitationEmail } from '@/lib/notifications/invitations'
 import { createActivityLog } from '@/server/services/boards'
+import { deliverInvitationEmail } from '@/server/services/invitations'
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -187,20 +187,14 @@ export async function POST(request: Request, { params }: Params) {
     },
   })
 
-  try {
-    await sendInvitationEmail({
-      to: invitation.email,
-      role: invitation.role,
-      token: invitation.token,
-      inviterName: session.user.name,
-      workspaceName: board.workspace.name,
-      boardName: board.title,
-    })
-  } catch (error) {
-    await prisma.invitation.delete({ where: { id: invitation.id } })
-    const message = error instanceof Error ? error.message : 'Falha ao enviar e-mail de convite.'
-    return NextResponse.json({ error: message }, { status: 502 })
-  }
+  const delivery = await deliverInvitationEmail({
+    requestUrl: request.url,
+    token: invitation.token,
+    recipientEmail: parsed.data.email,
+    inviterName: session.user.name,
+    workspaceName: board.workspace.name,
+    boardTitle: board.title,
+  })
 
   await createActivityLog({
     workspaceId: board.workspaceId,
@@ -209,6 +203,7 @@ export async function POST(request: Request, { params }: Params) {
     entityType: 'INVITATION',
     action: 'board.invitation.created',
     message: `Enviou convite para ${invitation.email} no board ${board.title}`,
+    metadata: delivery.delivered ? undefined : { invitationLink: delivery.invitationLink, deliveryReason: delivery.reason },
   })
 
   return NextResponse.json({
@@ -218,6 +213,11 @@ export async function POST(request: Request, { params }: Params) {
       role: invitation.role,
       status: invitation.status,
       createdAt: invitation.createdAt,
+    },
+    delivery: {
+      delivered: delivery.delivered,
+      reason: delivery.reason,
+      invitationLink: delivery.invitationLink,
     },
   })
 }

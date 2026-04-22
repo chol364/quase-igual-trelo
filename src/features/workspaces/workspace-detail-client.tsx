@@ -34,6 +34,12 @@ interface WorkspaceInvitation {
   createdAt: string | Date
 }
 
+interface InviteDelivery {
+  delivered: boolean
+  reason?: string
+  invitationLink?: string
+}
+
 interface WorkspaceDetail {
   id: string
   name: string
@@ -65,6 +71,7 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('MEMBER')
   const [inviteMessage, setInviteMessage] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
   const [form, setForm] = useState<{
     title: string
     slug: string
@@ -105,6 +112,7 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
     }
 
     setInviteMessage('')
+    setInviteLink('')
     const response = await fetch(`/api/workspaces/${workspace.id}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -124,7 +132,13 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
 
     if (data.invitation) {
       await refreshMembers()
-      setInviteMessage('Convite enviado por e-mail e pendente.')
+      const delivery = data.delivery as InviteDelivery | undefined
+      setInviteLink(delivery?.invitationLink || '')
+      setInviteMessage(
+        delivery?.delivered
+          ? 'Convite enviado por e-mail e pendente.'
+          : 'Convite criado sem envio automatico. Copie o link abaixo e envie manualmente.'
+      )
     }
 
     setInviteEmail('')
@@ -277,6 +291,24 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
                   </button>
                   {inviteMessage ? <span className="text-sm text-emerald-200">{inviteMessage}</span> : null}
                 </div>
+                {inviteLink ? (
+                  <div className="mt-4 space-y-2 rounded-2xl border border-amber-300/15 bg-amber-500/10 p-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-100/70">Link do convite</p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        readOnly
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white/80 outline-none"
+                        value={inviteLink}
+                      />
+                      <button
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                        onClick={() => void navigator.clipboard.writeText(inviteLink)}
+                      >
+                        Copiar link
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
