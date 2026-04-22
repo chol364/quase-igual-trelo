@@ -20,6 +20,11 @@ export const boardInclude = {
         include: {
           members: { include: { user: true } },
           labels: { include: { label: true } },
+          activityLogs: {
+            orderBy: { createdAt: 'desc' as const },
+            take: 8,
+            include: { user: true },
+          },
           checklists: {
             orderBy: { sortOrder: 'asc' as const },
             include: {
@@ -198,6 +203,19 @@ export function serializeBoard(board: FullBoard) {
             mimeType: attachment.mimeType,
             size: attachment.size,
           })),
+          activity: card.activityLogs.map((log) => ({
+            id: log.id,
+            action: log.action,
+            message: log.message,
+            createdAt: log.createdAt,
+            entityType: log.entityType,
+            user: {
+              id: log.user.id,
+              name: log.user.name,
+              username: log.user.username,
+              avatarColor: log.user.avatarColor,
+            },
+          })),
         }
       }),
     })),
@@ -262,34 +280,68 @@ export async function createDefaultBoardData(boardId: string, userId: string, te
     createdLists[3] ?? createdLists[createdLists.length - 1],
   ]
 
-  await prisma.card.create({
-    data: {
-      boardId,
-      listId: todo.id,
-      createdById: userId,
-      title: 'Bem-vindo ao seu board',
-      slug: `bem-vindo-${Date.now()}`,
-      description: 'Crie listas, mova cards e edite detalhes no modal lateral.',
-      priority: 'MEDIUM',
-      status: 'TODO',
-      sortOrder: 0,
-      checklists: {
-        create: [
-          {
-            title: 'Primeiros passos',
-            sortOrder: 0,
-            items: {
-              create: [
-                { title: 'Renomear o board', sortOrder: 0 },
-                { title: 'Criar mais listas', sortOrder: 1 },
-                { title: 'Mover um card com drag and drop', sortOrder: 2 },
-              ],
+  const templateCards = template?.starterCards?.length
+    ? template.starterCards.map((card, index) => ({
+        boardId,
+        listId: createdLists[card.listIndex]?.id ?? todo.id,
+        createdById: userId,
+        title: card.title,
+        slug: `${card.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}-${index}`,
+        description: card.description,
+        priority: card.priority,
+        status: 'TODO',
+        sortOrder: index,
+        checklists: {
+          create: [
+            {
+              title: 'Checklist inicial',
+              sortOrder: 0,
+              items: {
+                create: card.checklist.map((item, itemIndex) => ({
+                  title: item,
+                  sortOrder: itemIndex,
+                })),
+              },
             },
+          ],
+        },
+      }))
+    : [
+        {
+          boardId,
+          listId: todo.id,
+          createdById: userId,
+          title: 'Bem-vindo ao seu board',
+          slug: `bem-vindo-${Date.now()}`,
+          description: 'Crie listas, mova cards e edite detalhes no modal lateral.',
+          priority: 'MEDIUM',
+          status: 'TODO',
+          sortOrder: 0,
+          checklists: {
+            create: [
+              {
+                title: 'Primeiros passos',
+                sortOrder: 0,
+                items: {
+                  create: [
+                    { title: 'Renomear o board', sortOrder: 0 },
+                    { title: 'Criar mais listas', sortOrder: 1 },
+                    { title: 'Mover um card com drag and drop', sortOrder: 2 },
+                  ],
+                },
+              },
+            ],
           },
-        ],
-      },
-    },
-  })
+        },
+      ]
+
+  await prisma.$transaction(
+    templateCards.map((card) =>
+      prisma.card.create({
+        data: card,
+      })
+    )
+  )
 
   return { backlog, todo, doing, done }
 }

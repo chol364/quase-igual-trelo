@@ -55,6 +55,29 @@ export async function AppShell({
           section: 'Navegacao',
         })),
         ...(
+          await prisma.workspace.findMany({
+            where: {
+              members: {
+                some: { userId: user.id },
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 8,
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              description: true,
+            },
+          })
+        ).map((workspace) => ({
+          id: workspace.id,
+          label: workspace.name,
+          hint: workspace.description || 'Abrir workspace',
+          href: `/workspaces/${workspace.slug}`,
+          section: 'Workspaces',
+        })),
+        ...(
           await prisma.board.findMany({
             where: {
               workspace: {
@@ -70,6 +93,7 @@ export async function AppShell({
               id: true,
               title: true,
               slug: true,
+              description: true,
               workspace: {
                 select: { name: true },
               },
@@ -78,9 +102,45 @@ export async function AppShell({
         ).map((board) => ({
           id: board.id,
           label: board.title,
-          hint: board.workspace.name,
+          hint: board.description || board.workspace.name,
           href: `/boards/${board.slug}`,
           section: 'Boards',
+        })),
+        ...(
+          await prisma.card.findMany({
+            where: {
+              isArchived: false,
+              board: {
+                workspace: {
+                  members: {
+                    some: { userId: user.id },
+                  },
+                },
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 12,
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              board: {
+                select: {
+                  slug: true,
+                  title: true,
+                  workspace: {
+                    select: { name: true },
+                  },
+                },
+              },
+            },
+          })
+        ).map((card) => ({
+          id: card.id,
+          label: card.title,
+          hint: `${card.board.title} • ${card.board.workspace.name}${card.description ? ` • ${card.description}` : ''}`,
+          href: `/boards/${card.board.slug}?card=${card.id}`,
+          section: 'Cards',
         })),
       ]
     : navItems.map((item) => ({
