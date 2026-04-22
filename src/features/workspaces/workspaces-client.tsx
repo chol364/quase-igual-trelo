@@ -67,7 +67,7 @@ export function WorkspacesClient({ initialWorkspaces }: { initialWorkspaces: Wor
 
   return (
     <div className="grid gap-6 xl:grid-cols-[400px_minmax(0,1fr)]">
-      <Card className="fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.84))] text-white">
+      <Card className="fade-up ambient-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.84))] text-white">
         <div className="space-y-5">
           <div>
             <p className="text-sm uppercase tracking-[0.24em] text-white/42">Novo espaco</p>
@@ -134,57 +134,75 @@ export function WorkspacesClient({ initialWorkspaces }: { initialWorkspaces: Wor
       </Card>
 
       <section className="space-y-4">
-        {workspaces.map((workspace, index) => (
-          <Card
-            key={workspace.id}
-            className="stagger-rise border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.82))] text-white"
-            style={{ animationDelay: `${index * 90 + 120}ms` }}
-          >
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-2xl font-semibold">{workspace.name}</h3>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/50">
-                    {workspace.visibility}
-                  </span>
-                </div>
-                <p className="max-w-xl text-white/60">{workspace.description || 'Sem descricao.'}</p>
-                <div className="flex flex-wrap gap-3 text-sm text-white/42">
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{workspace.membersCount} membros</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{workspace.boards.length} boards</span>
-                </div>
-                <div className="flex flex-wrap gap-3 pt-2">
-                  <Link className="rounded-full bg-blue-500 px-4 py-2 text-sm font-medium shadow-[0_16px_30px_rgba(59,130,246,0.25)] transition hover:-translate-y-0.5" href={`/workspaces/${workspace.slug}`}>
-                    Abrir workspace
-                  </Link>
-                  <Button variant="secondary" onClick={() => deleteWorkspace(workspace.id)}>
-                    Excluir
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid min-w-[300px] gap-3 md:grid-cols-2">
-                {workspace.boards.length ? (
-                  workspace.boards.slice(0, 4).map((board) => (
-                    <Link
-                      key={board.id}
-                      href={`/boards/${board.slug}`}
-                      className="hover-lift rounded-[1.5rem] border border-white/10 p-4 transition"
-                      style={{ background: board.background || '#14243c' }}
-                    >
-                      <p className="font-medium">{board.title}</p>
-                      <p className="mt-2 text-sm text-white/75">{board.isFavorite ? 'Favorito' : 'Board ativo'}</p>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="col-span-full rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.03] p-5 text-sm text-white/48">
-                    Nenhum board criado ainda neste espaco.
+        {workspaces.length ? (
+          workspaces.map((workspace, index) => (
+            <Card
+              key={workspace.id}
+              className="app-stagger app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.82))] text-white"
+              style={{ animationDelay: `${index * 70 + 100}ms` }}
+            >
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-2xl font-semibold">{workspace.name}</h3>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/50">
+                      {workspace.visibility}
+                    </span>
                   </div>
-                )}
+                  <p className="max-w-xl text-white/60">{workspace.description || 'Sem descricao.'}</p>
+                  <div className="flex flex-wrap gap-3 text-sm text-white/42">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{workspace.membersCount} membros</span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{workspace.boards.length} boards</span>
+                  </div>
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <Link className="micro-bounce rounded-full bg-blue-500 px-4 py-2 text-sm font-medium shadow-[0_16px_30px_rgba(59,130,246,0.25)] transition hover:-translate-y-0.5" href={`/workspaces/${workspace.slug}`}>
+                      Abrir workspace
+                    </Link>
+                    <Button variant="secondary" onClick={() => deleteWorkspace(workspace.id)}>
+                      Excluir
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid min-w-[300px] gap-3 md:grid-cols-2">
+                  {workspace.boards.length ? (
+                    workspace.boards.slice(0, 4).map((board, boardIndex) => (
+                      <Link
+                        key={board.id}
+                        href={`/boards/${board.slug}`}
+                        className="app-stagger hover-lift spotlight-card rounded-[1.5rem] border border-white/10 p-4 transition"
+                        style={{ background: board.background || '#14243c', animationDelay: `${boardIndex * 40 + 160}ms` }}
+                      >
+                        <p className="font-medium">{board.title}</p>
+                        <p className="mt-2 text-sm text-white/75">{board.isFavorite ? 'Favorito' : 'Board ativo'}</p>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="empty-glow app-rise col-span-full rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.03] p-6 text-center text-sm text-white/48">
+                      <div className="empty-orbit mx-auto mb-4 grid h-18 w-18 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+                        <span className="text-2xl">▤</span>
+                      </div>
+                      <p className="font-medium text-white/75">Nenhum board criado ainda</p>
+                      <p className="mt-2 leading-6">Esse workspace fica bem mais útil quando tiver ao menos um quadro ativo.</p>
+                    </div>
+                  )}
+                </div>
               </div>
+            </Card>
+          ))
+        ) : (
+          <Card className="empty-glow app-rise border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.82))] text-white">
+            <div className="py-10 text-center">
+              <div className="empty-orbit mx-auto mb-6 grid h-24 w-24 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+                <span className="text-3xl">◎</span>
+              </div>
+              <p className="text-2xl font-semibold">Nenhum workspace por enquanto</p>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-white/58">
+                Comece criando um espaco de trabalho para separar clientes, times ou frentes de execucao. A estrutura nasce aqui.
+              </p>
             </div>
           </Card>
-        ))}
+        )}
       </section>
     </div>
   )

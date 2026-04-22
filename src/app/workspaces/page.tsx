@@ -44,7 +44,7 @@ export default async function WorkspacesPage() {
   return (
     <AppShell user={session.user}>
       <div className="space-y-8">
-        <section className="fade-up rounded-[2.2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(11,23,44,.94),rgba(16,28,54,.84))] p-8 text-white shadow-[0_34px_90px_rgba(0,0,0,0.28)]">
+        <section className="fade-up ambient-panel rounded-[2.2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(11,23,44,.94),rgba(16,28,54,.84))] p-8 text-white shadow-[0_34px_90px_rgba(0,0,0,0.28)]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-sm uppercase tracking-[0.3em] text-cyan-300/70">Espacos</p>
@@ -55,11 +55,11 @@ export default async function WorkspacesPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.05] px-5 py-4">
+              <div className="app-panel app-rise rounded-[1.25rem] border border-white/10 bg-white/[0.05] px-5 py-4">
                 <p className="text-sm text-white/45">Total de espacos</p>
                 <p className="mt-2 text-3xl font-semibold">{initialWorkspaces.length}</p>
               </div>
-              <div className="rounded-[1.25rem] border border-white/10 bg-black/15 px-5 py-4">
+              <div className="app-panel app-rise rounded-[1.25rem] border border-white/10 bg-black/15 px-5 py-4">
                 <p className="text-sm text-white/45">Boards somados</p>
                 <p className="mt-2 text-3xl font-semibold">
                   {initialWorkspaces.reduce((acc, workspace) => acc + workspace.boards.length, 0)}

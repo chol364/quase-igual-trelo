@@ -141,6 +141,39 @@ function statusLabel(value: string) {
   return value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (char) => char.toUpperCase())
 }
 
+function EmptyBoardState({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string
+  description: string
+  actionLabel?: string
+  onAction?: () => void
+}) {
+  return (
+    <Card className="empty-glow app-rise border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.82))] text-white">
+      <div className="py-12 text-center">
+        <div className="empty-orbit mx-auto mb-6 grid h-24 w-24 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+          <Sparkles className="h-9 w-9 text-cyan-200/90" />
+        </div>
+        <p className="text-2xl font-semibold">{title}</p>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-white/58">{description}</p>
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            className="micro-bounce mt-6 rounded-full border border-white/10 bg-white/[0.05] px-5 py-3 text-sm text-white/78 transition hover:bg-white/[0.1] hover:text-white"
+            onClick={onAction}
+          >
+            {actionLabel}
+          </button>
+        ) : null}
+      </div>
+    </Card>
+  )
+}
+
 function findListByCard(lists: BoardList[], cardId: string) {
   return lists.find((list) => list.cards.some((card) => card.id === cardId))
 }
@@ -199,7 +232,7 @@ function AnimatedSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          'group flex w-full items-center justify-between gap-3 rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm',
+          'app-panel micro-bounce group flex w-full items-center justify-between gap-3 rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm',
           open ? 'border-cyan-300/40 bg-[linear-gradient(180deg,rgba(45,112,255,0.2),rgba(255,255,255,0.05))] shadow-[0_16px_40px_rgba(15,23,42,0.35)]' : 'hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07]'
         )}
         onClick={() => setOpen((current) => !current)}
@@ -360,7 +393,7 @@ function DatePickerField({
   )
 }
 
-function SortableCard({ card, onOpen, isFocused }: { card: BoardCard; onOpen: (card: BoardCard) => void; isFocused: boolean }) {
+function SortableCard({ card, onOpen, isFocused, cardIndex }: { card: BoardCard; onOpen: (card: BoardCard) => void; isFocused: boolean; cardIndex: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: 'card' } })
   const checklistTotal = card.checklistProgress.total || 0
   const checklistCompleted = card.checklistProgress.completed
@@ -368,9 +401,9 @@ function SortableCard({ card, onOpen, isFocused }: { card: BoardCard; onOpen: (c
   return (
     <button
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.65 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.65 : 1, animationDelay: `${cardIndex * 34}ms` }}
       suppressHydrationWarning
-      className={`hover-lift group relative w-full overflow-hidden rounded-[1.5rem] border p-4 text-left transition ${isFocused ? 'border-cyan-400/50 ring-2 ring-cyan-400/20 shadow-[0_24px_60px_rgba(8,145,178,0.18)]' : 'border-white/10'} bg-[linear-gradient(180deg,rgba(11,18,33,0.96),rgba(7,12,24,0.92))]`}
+      className={`app-stagger hover-lift app-panel group relative w-full overflow-hidden rounded-[1.5rem] border p-4 text-left transition ${isFocused ? 'border-cyan-400/50 ring-2 ring-cyan-400/20 shadow-[0_24px_60px_rgba(8,145,178,0.18)]' : 'border-white/10'} bg-[linear-gradient(180deg,rgba(11,18,33,0.96),rgba(7,12,24,0.92))]`}
       onClick={() => onOpen(card)}
       {...attributes}
       {...listeners}
@@ -480,6 +513,7 @@ function SortableList({
   onRenameList,
   onDeleteList,
   onOpenCard,
+  listIndex,
 }: {
   list: BoardList
   canMutate: boolean
@@ -488,13 +522,14 @@ function SortableList({
   onRenameList: (listId: string, title: string) => Promise<void>
   onDeleteList: (listId: string) => Promise<void>
   onOpenCard: (card: BoardCard) => void
+  listIndex: number
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: list.id, data: { type: 'list' }, disabled: !canMutate })
   const [title, setTitle] = useState(list.title)
   const [newCardTitle, setNewCardTitle] = useState('')
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="glass-ring stagger-rise w-[340px] shrink-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,33,0.96),rgba(8,14,26,0.9))] p-4">
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, animationDelay: `${listIndex * 54}ms` }} className="glass-ring app-rise app-panel w-[340px] shrink-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,33,0.96),rgba(8,14,26,0.9))] p-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex-1">
           <input className="w-full rounded-xl border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-white outline-none" disabled={!canMutate} value={title} onChange={(event) => setTitle(event.target.value)} onBlur={() => { if (canMutate && title.trim() !== list.title) void onRenameList(list.id, title.trim()) }} />
@@ -508,7 +543,7 @@ function SortableList({
         ) : null}
       </div>
       <SortableContext items={list.cards.map((card) => card.id)} strategy={rectSortingStrategy}>
-        <div className="space-y-3">{list.cards.map((card) => <SortableCard key={card.id} card={card} isFocused={card.id === focusedCardId} onOpen={onOpenCard} />)}</div>
+        <div className="space-y-3">{list.cards.map((card, cardIndex) => <SortableCard key={card.id} card={card} cardIndex={cardIndex} isFocused={card.id === focusedCardId} onOpen={onOpenCard} />)}</div>
       </SortableContext>
       {canMutate ? (
         <div className="mt-4 space-y-3 rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-3">
@@ -1012,6 +1047,8 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
     }))
   }, [board.lists, deferredSearch, memberFilter, priorityFilter, labelFilter, dueFilter])
   const filteredCards = filteredLists.flatMap((list) => list.cards)
+  const hasBoardContent = board.lists.length > 0
+  const hasFilteredResults = filteredCards.length > 0
   const clampedFocusedIndex = filteredCards.length ? Math.min(focusedCardIndex, filteredCards.length - 1) : 0
   const effectiveFocusedCardId = filteredCards.length ? filteredCards[clampedFocusedIndex]?.id ?? null : null
   const memberOptions = [{ value: '', label: 'Todos membros', hint: 'Sem filtro por responsavel' }, ...board.members.map((member) => ({ value: member.id, label: member.name, hint: `@${member.username}` }))]
@@ -1249,7 +1286,7 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
           <Card className="glass-ring fade-up relative z-30 isolate border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(7,13,25,0.86))] text-white">
             <div className="space-y-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex flex-wrap gap-3">{viewOptions.map((option) => <button key={option} className={cn('rounded-full border px-4 py-2.5 text-sm transition duration-200', board.defaultView === option ? 'border-cyan-300/20 bg-[linear-gradient(135deg,#3b82f6,#2563eb)] text-white shadow-[0_16px_35px_rgba(37,99,235,0.34)]' : 'border-white/10 bg-white/[0.04] text-white/65 hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white')} onClick={() => void persistView(option)}>{statusLabel(option)}</button>)}</div>
+                <div className="flex flex-wrap gap-3">{viewOptions.map((option) => <button key={option} className={cn('micro-bounce rounded-full border px-4 py-2.5 text-sm transition duration-200', board.defaultView === option ? 'border-cyan-300/20 bg-[linear-gradient(135deg,#3b82f6,#2563eb)] text-white shadow-[0_16px_35px_rgba(37,99,235,0.34)]' : 'border-white/10 bg-white/[0.04] text-white/65 hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white')} onClick={() => void persistView(option)}>{statusLabel(option)}</button>)}</div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
                   <span className="rounded-full border border-cyan-300/14 bg-cyan-400/8 px-3 py-1.5 text-cyan-100/88">{filteredCards.length} cards visiveis</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{activeFilterCount} filtros ativos</span>
@@ -1257,7 +1294,7 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
                 </div>
               </div>
               <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.78fr))]">
-                <div className="rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="app-panel micro-bounce rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                   <div className="flex items-center gap-3">
                     <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-white/62">
                       <Search className="h-4 w-4" />
@@ -1281,15 +1318,60 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
                   </span>
                   <p>/ busca, Ctrl/Cmd + K acoes rapidas, Ctrl/Cmd + L nova lista, Shift + setas move card, Enter abre.</p>
                 </div>
-                {canMutate ? <div className="flex w-full gap-3 md:w-auto md:min-w-[360px]"><input className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none" placeholder="Nova lista" value={newListTitle} onChange={(event) => setNewListTitle(event.target.value)} /><Button onClick={() => void createList(newListTitle.trim())}>Criar lista</Button></div> : null}
+                {canMutate ? <div className="flex w-full gap-3 md:w-auto md:min-w-[360px]"><input className="micro-bounce w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none" placeholder="Nova lista" value={newListTitle} onChange={(event) => setNewListTitle(event.target.value)} /><Button onClick={() => void createList(newListTitle.trim())}>Criar lista</Button></div> : null}
               </div>
             </div>
           </Card>
-          {board.defaultView === 'KANBAN' ? <div className="overflow-x-auto pb-5"><DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={(event) => void handleDragEnd(event)}><SortableContext items={board.lists.map((list) => list.id)} strategy={horizontalListSortingStrategy}><div className="flex min-h-[640px] items-start gap-5 pt-1">{filteredLists.map((list, index) => <div key={list.id} style={{ animationDelay: `${index * 70}ms` }}><SortableList list={list} canMutate={Boolean(canMutate)} focusedCardId={effectiveFocusedCardId} onCreateCard={createCard} onRenameList={renameList} onDeleteList={deleteList} onOpenCard={(card) => { const nextIndex = filteredCards.findIndex((item) => item.id === card.id); if (nextIndex >= 0) setFocusedCardIndex(nextIndex); setSelectedCardId(card.id) }} /></div>)}</div></SortableContext></DndContext></div> : null}
+          {board.defaultView === 'KANBAN' ? (
+            !hasBoardContent ? (
+              <EmptyBoardState
+                title="Este board ainda nao tem listas"
+                description="Crie a primeira lista para começar a distribuir cards, prioridades e fluxo de trabalho aqui dentro."
+                actionLabel={canMutate ? 'Criar primeira lista' : undefined}
+                onAction={canMutate ? () => void createList('Primeira lista') : undefined}
+              />
+            ) : !hasFilteredResults ? (
+              <EmptyBoardState
+                title="Nenhum card bate com os filtros atuais"
+                description="A busca e os filtros zeraram o resultado. Ajuste os critérios ou limpe os filtros para recuperar o quadro."
+                actionLabel={activeFilterCount ? 'Limpar filtros' : undefined}
+                onAction={activeFilterCount ? resetFilters : undefined}
+              />
+            ) : (
+              <div className="overflow-x-auto pb-5">
+                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={(event) => void handleDragEnd(event)}>
+                  <SortableContext items={board.lists.map((list) => list.id)} strategy={horizontalListSortingStrategy}>
+                    <div className="flex min-h-[640px] items-start gap-5 pt-1">
+                      {filteredLists.map((list, index) => (
+                        <div key={list.id}>
+                          <SortableList list={list} listIndex={index} canMutate={Boolean(canMutate)} focusedCardId={effectiveFocusedCardId} onCreateCard={createCard} onRenameList={renameList} onDeleteList={deleteList} onOpenCard={(card) => { const nextIndex = filteredCards.findIndex((item) => item.id === card.id); if (nextIndex >= 0) setFocusedCardIndex(nextIndex); setSelectedCardId(card.id) }} />
+                        </div>
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            )
+          ) : null}
           {board.defaultView === 'LIST' ? <Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-white/42"><tr><th className="pb-3">Card</th><th className="pb-3">Lista</th><th className="pb-3">Prioridade</th><th className="pb-3">Prazo</th></tr></thead><tbody>{filteredLists.flatMap((list) => list.cards.map((card) => <tr key={card.id} className="border-t border-white/10"><td className="py-4"><button className="font-medium hover:text-cyan-200" onClick={() => setSelectedCardId(card.id)}>{card.title}</button></td><td className="py-4 text-white/58">{list.title}</td><td className="py-4 text-white/58">{statusLabel(card.priority)}</td><td className="py-4 text-white/58">{formatDate(card.dueDate)}</td></tr>))}</tbody></table></div></Card> : null}
           {board.defaultView === 'CALENDAR' ? <div className="grid gap-4 md:grid-cols-3">{filteredCards.filter((card) => card.dueDate).map((card) => <Card key={card.id} className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><button className="w-full text-left" onClick={() => setSelectedCardId(card.id)}><p className="text-xs uppercase tracking-[0.22em] text-white/40">{formatDate(card.dueDate)}</p><p className="mt-3 text-lg font-semibold">{card.title}</p><p className="mt-2 text-sm text-white/55">{card.description || 'Sem descricao.'}</p></button></Card>)}</div> : null}
           {board.defaultView === 'TIMELINE' ? <Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><div className="space-y-4">{filteredCards.filter((card) => card.startDate || card.dueDate).map((card, index) => <div key={card.id} className="grid gap-4 md:grid-cols-[220px_1fr]"><button className="text-left font-medium hover:text-cyan-200" onClick={() => setSelectedCardId(card.id)}>{card.title}</button><div className="rounded-full border border-white/10 bg-black/10 p-2"><div className="h-6 rounded-full bg-[linear-gradient(90deg,#22d3ee,#3b82f6,#8b5cf6)]" style={{ width: `${28 + (index % 6) * 10}%` }} /></div></div>)}</div></Card> : null}
-          {board.defaultView === 'DASHBOARD' ? <div className="grid gap-6 lg:grid-cols-3"><Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Cards filtrados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.length}</p></Card><Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Atrasados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => isOverdueCard(card)).length}</p></Card><Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Concluidos</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => card.status === 'DONE').length}</p></Card></div> : null}
+          {board.defaultView === 'DASHBOARD' ? (
+            hasFilteredResults ? (
+              <div className="grid gap-6 lg:grid-cols-3">
+                <Card className="app-rise app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Cards filtrados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.length}</p></Card>
+                <Card className="app-rise app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white" style={{ animationDelay: '40ms' }}><p className="text-sm uppercase tracking-[0.22em] text-white/42">Atrasados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => isOverdueCard(card)).length}</p></Card>
+                <Card className="app-rise app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white" style={{ animationDelay: '80ms' }}><p className="text-sm uppercase tracking-[0.22em] text-white/42">Concluidos</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => card.status === 'DONE').length}</p></Card>
+              </div>
+            ) : (
+              <EmptyBoardState
+                title="O dashboard ainda nao tem sinal suficiente"
+                description="Assim que esse board tiver cards ativos, prazos ou progresso, o resumo executivo aparece aqui com mais valor."
+                actionLabel={activeFilterCount ? 'Limpar filtros' : undefined}
+                onAction={activeFilterCount ? resetFilters : undefined}
+              />
+            )
+          ) : null}
         </div>
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
           <Card className="glass-ring fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,14,25,0.82))] text-white"><div className="flex items-center justify-between gap-3"><p className="text-sm uppercase tracking-[0.24em] text-white/42">Membros do board</p><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">{board.members.length}</span></div><div className="mt-4 space-y-3">{board.members.map((member) => <div key={member.id} className="hover-lift rounded-[1.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] px-3 py-3"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl text-sm font-semibold text-white shadow-[0_14px_30px_rgba(15,23,42,0.28)]" style={{ backgroundColor: member.avatarColor }}>{member.name.slice(0, 2).toUpperCase()}</span><div><p className="font-medium">{member.name}</p><p className="text-sm text-white/45">@{member.username} {member.role ? `• ${member.role}` : ''}</p></div></div></div>)}</div></Card>

@@ -93,11 +93,11 @@ export async function AppShell({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(38,131,255,0.22),transparent_20%),radial-gradient(circle_at_bottom_right,rgba(0,184,148,0.14),transparent_18%),linear-gradient(180deg,#09111e,#0b1527_45%,#0c1728)] text-white">
-      <header className="sticky top-0 z-30 border-b border-white/8 bg-[rgba(6,11,22,0.72)] backdrop-blur-2xl">
+      <header className="fade-in sticky top-0 z-30 border-b border-white/8 bg-[rgba(6,11,22,0.72)] backdrop-blur-2xl">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-5">
             <Link href="/app" className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[linear-gradient(135deg,#26c6da,#155eef)] text-sm font-bold shadow-[0_18px_40px_rgba(21,94,239,0.35)]">
+              <div className="orbital-ring soft-pulse grid h-11 w-11 place-items-center rounded-2xl bg-[linear-gradient(135deg,#26c6da,#155eef)] text-sm font-bold shadow-[0_18px_40px_rgba(21,94,239,0.35)]">
                 AT
               </div>
               <div>
@@ -111,7 +111,7 @@ export async function AppShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="relative rounded-full px-4 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
+                  className="nav-item-glow relative rounded-full px-4 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
                 >
                   {item.label}
                   {item.href === '/notifications' ? <NotificationBadge initialCount={unreadCount} userId={user.id ?? ''} /> : null}
@@ -123,7 +123,7 @@ export async function AppShell({
           <div className="flex items-center gap-3">
             <CommandPalette items={commandItems} />
             {user.id ? <NotificationHub userId={user.id} initialCount={unreadCount} initialNotifications={latestNotifications} /> : null}
-            <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 md:flex">
+            <div className="ambient-panel hidden items-center gap-3 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 md:flex">
               <span className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-xs font-semibold text-cyan-200">
                 {user.name?.slice(0, 2).toUpperCase()}
               </span>
