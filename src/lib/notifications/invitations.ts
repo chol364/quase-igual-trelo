@@ -13,7 +13,16 @@ function getInvitationUrl(token: string) {
     throw new Error('APP_URL (ou NEXTAUTH_URL) nao configurada para gerar link de convite.')
   }
 
-  return `${baseUrl.replace(/\/$/, '')}/register?inviteToken=${encodeURIComponent(token)}`
+  return `${baseUrl.replace(/\/$/, '')}/invite/${encodeURIComponent(token)}`
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 }
 
 function getResendConfig() {
@@ -36,17 +45,21 @@ export async function sendInvitationEmail(payload: InvitationEmailPayload) {
     `${inviter} convidou voce para o ${scope} com papel ${payload.role}.`,
     `Abra este link para continuar: ${invitationUrl}`,
   ].join('\n')
+  const escapedInviter = escapeHtml(inviter)
+  const escapedScope = escapeHtml(scope)
+  const escapedRole = escapeHtml(payload.role)
+  const escapedInvitationUrl = escapeHtml(invitationUrl)
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
       <p>Ola!</p>
-      <p><strong>${inviter}</strong> convidou voce para o ${scope} com papel <strong>${payload.role}</strong>.</p>
+      <p><strong>${escapedInviter}</strong> convidou voce para o ${escapedScope} com papel <strong>${escapedRole}</strong>.</p>
       <p>
-        <a href="${invitationUrl}" style="display:inline-block;background:#06b6d4;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px">
+        <a href="${escapedInvitationUrl}" style="display:inline-block;background:#06b6d4;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px">
           Aceitar convite
         </a>
       </p>
       <p>Se o botao nao funcionar, use este link:</p>
-      <p><a href="${invitationUrl}">${invitationUrl}</a></p>
+      <p><a href="${escapedInvitationUrl}">${escapedInvitationUrl}</a></p>
     </div>
   `
 

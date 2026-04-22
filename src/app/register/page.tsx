@@ -10,9 +10,15 @@ const cards = [
   ['Escalavel', 'Arquitetura preparada para filtros, analytics, automacoes e notificacoes.'],
 ]
 
-export default async function RegisterPage() {
+interface RegisterPageProps {
+  searchParams: Promise<{ callbackUrl?: string }>
+}
+
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const session = await auth()
   if (session?.user?.id) redirect('/app')
+  const { callbackUrl } = await searchParams
+  const loginHref = callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-10">
@@ -24,7 +30,7 @@ export default async function RegisterPage() {
           <RegisterForm />
           <p className="text-sm text-white/55">
             Ja tem conta?{' '}
-            <Link className="text-cyan-300 transition hover:text-cyan-200" href="/login">
+            <Link className="text-cyan-300 transition hover:text-cyan-200" href={loginHref}>
               Entrar
             </Link>
           </p>

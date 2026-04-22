@@ -9,9 +9,15 @@ const points = [
   'Continue o fluxo sem perder espacos, membros e atividade.',
 ]
 
-export default async function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<{ callbackUrl?: string }>
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await auth()
   if (session?.user?.id) redirect('/app')
+  const { callbackUrl } = await searchParams
+  const registerHref = callbackUrl ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/register'
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-10">
@@ -45,7 +51,7 @@ export default async function LoginPage() {
           <LoginForm />
           <p className="text-sm text-white/55">
             Nao tem conta?{' '}
-            <Link className="text-cyan-300 transition hover:text-cyan-200" href="/register">
+            <Link className="text-cyan-300 transition hover:text-cyan-200" href={registerHref}>
               Criar agora
             </Link>
           </p>
