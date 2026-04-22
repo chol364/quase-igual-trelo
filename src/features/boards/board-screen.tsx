@@ -1,6 +1,6 @@
 'use client'
 
-import { DndContext, PointerSensor, closestCorners, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, rectSortingStrategy, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import Image from 'next/image'
@@ -405,7 +405,7 @@ function SortableCard({
   isSelected: boolean
   onToggleSelected: (cardId: string) => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: 'card' } })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: 'card', card } })
   const checklistTotal = card.checklistProgress.total || 0
   const checklistCompleted = card.checklistProgress.completed
   const checklistPercent = checklistTotal ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
@@ -1050,6 +1050,7 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
   const [newListTitle, setNewListTitle] = useState('')
   const [selectedCardId, setSelectedCardId] = useState<string | null>(initialSelectedCardId)
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([])
+  const [activeDragCard, setActiveDragCard] = useState<BoardCard | null>(null)
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null)
   const [focusedCardIndex, setFocusedCardIndex] = useState(0)
   const [quickOpen, setQuickOpen] = useState(false)
@@ -1312,7 +1313,16 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
     await refreshBoard()
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const activeType = event.active.data.current?.type as 'list' | 'card' | undefined
+    if (activeType === 'card') {
+      const card = event.active.data.current?.card as BoardCard | undefined
+      setActiveDragCard(card ?? null)
+    }
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
+    setActiveDragCard(null)
     if (!canMutate) return
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -1480,7 +1490,7 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
               />
             ) : (
               <div className="overflow-x-auto pb-5">
-                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={(event) => void handleDragEnd(event)}>
+                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragCancel={() => setActiveDragCard(null)} onDragEnd={(event) => void handleDragEnd(event)}>
                   <SortableContext items={board.lists.map((list) => list.id)} strategy={horizontalListSortingStrategy}>
                     <div className="flex min-h-[640px] items-start gap-5 pt-1">
                       {filteredLists.map((list, index) => (
@@ -1490,6 +1500,9 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
                       ))}
                     </div>
                   </SortableContext>
+                  <DragOverlay adjustScale={false}>
+                    {activeDragCard ? <DraggingCardOverlay card={activeDragCard} /> : null}
+                  </DragOverlay>
                 </DndContext>
               </div>
             )
@@ -1525,5 +1538,38 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
       {selectedCard ? <CardModal key={selectedCard.id} card={selectedCard} boardMembers={board.members} boardLabels={board.labels} canMutate={Boolean(canMutate)} onClose={() => setSelectedCardId(null)} onSave={async (payload) => { await saveCard(selectedCard.id, payload) }} onDelete={async () => { await deleteCard(selectedCard.id) }} onComment={async (content) => { await addComment(selectedCard.id, content) }} onUpdateComment={async (commentId, content) => { await updateComment(commentId, content) }} onDeleteComment={async (commentId) => { await deleteComment(commentId) }} onUploadAttachment={async (file) => { await uploadAttachment(selectedCard.id, file) }} onDeleteAttachment={async (attachmentId) => { await deleteAttachment(attachmentId) }} /> : null}
       {undoAction ? <div className="app-fade fixed bottom-5 right-5 z-[75] max-w-md rounded-[1.4rem] border border-white/10 bg-[#091425] p-4 text-white shadow-[0_26px_90px_rgba(0,0,0,0.42)]"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium">{undoAction.label}</p><p className="mt-1 text-xs text-white/45">Voce pode desfazer esta acao por alguns segundos.</p></div><button className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-white/55 hover:bg-white/[0.08] hover:text-white" onClick={() => setUndoAction(null)}><X className="h-4 w-4" /></button></div><div className="mt-4 flex items-center justify-end gap-2"><Button variant="secondary" onClick={() => setUndoAction(null)}>Fechar</Button><Button onClick={() => void undoAction.onUndo().then(() => setUndoAction(null))}>Desfazer</Button></div></div> : null}
     </>
+  )
+}
+
+function DraggingCardOverlay({ card }: { card: BoardCard }) {
+  const checklistTotal = card.checklistProgress.total || 0
+  const checklistCompleted = card.checklistProgress.completed
+  const checklistPercent = checklistTotal ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
+
+  return (
+    <div className="w-[320px] rotate-[1.2deg] overflow-hidden rounded-[1.5rem] border border-cyan-300/24 bg-[linear-gradient(180deg,rgba(11,18,33,0.98),rgba(7,12,24,0.96))] p-4 text-left text-white shadow-[0_28px_90px_rgba(8,145,178,0.22)]">
+      {card.coverColor ? <div className="mb-3 h-2 rounded-full" style={{ backgroundColor: card.coverColor }} /> : null}
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-semibold text-white">{card.title}</p>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white/50">{statusLabel(card.priority)}</span>
+      </div>
+      {card.labels.length ? <div className="mt-3 flex flex-wrap gap-2">{card.labels.slice(0, 2).map((label) => <span key={label.id} className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white" style={{ backgroundColor: label.color }}>{label.name}</span>)}</div> : null}
+      {card.description ? <p className="mt-3 text-sm leading-6 text-white/58">{card.description}</p> : null}
+      {checklistTotal ? (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between text-[11px] text-white/45">
+            <span>Checklist</span>
+            <span>{checklistCompleted}/{checklistTotal}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#3b82f6)]" style={{ width: `${checklistPercent}%` }} />
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-4 flex items-center justify-between text-xs text-white/45">
+        <span>{card.comments.length} comentarios</span>
+        <span>{formatDate(card.dueDate)}</span>
+      </div>
+    </div>
   )
 }
