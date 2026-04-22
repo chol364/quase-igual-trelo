@@ -1,15 +1,15 @@
 'use client'
 
-import { DndContext, PointerSensor, closestCorners, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, rectSortingStrategy, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import Image from 'next/image'
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Plus, Search, Sparkles, Trash2, X } from 'lucide-react'
 import { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { ArchivePanel, BoardCalendarView, BoardMembersPanel, BoardTimelineView, LabelsPanel, SavedFiltersPanel } from '@/features/boards/board-extras'
+import { SavedFiltersPanel } from '@/features/boards/board-extras'
 import { BOARD_VIEWS, CARD_PRIORITIES, CARD_STATUSES, type BoardView } from '@/lib/domain/constants'
 import { subscribeToBoard } from '@/lib/realtime/client'
 
@@ -17,6 +17,7 @@ type UserMini = { id: string; name: string; username: string; avatarColor: strin
 type BoardMember = UserMini & { role?: string }
 type AttachmentItem = { id: string; fileName: string; fileUrl: string; mimeType: string | null; size: number | null }
 type CardComment = { id: string; content: string; createdAt: string | Date; updatedAt?: string | Date; mentions?: unknown; author: UserMini }
+type CardActivity = { id: string; action: string; message: string; createdAt: string | Date; entityType: string; user: UserMini }
 type ChecklistItem = { id: string; title: string; isCompleted: boolean; sortOrder: number }
 type Checklist = { id: string; title: string; sortOrder: number; items: ChecklistItem[] }
 type BoardCard = {
@@ -42,6 +43,7 @@ type BoardCard = {
   checklistProgress: { total: number; completed: number }
   comments: CardComment[]
   attachments: AttachmentItem[]
+  activity: CardActivity[]
 }
 type BoardList = { id: string; title: string; sortOrder: number; limit: number | null; color: string | null; cards: BoardCard[] }
 type BoardData = {
@@ -70,13 +72,8 @@ type SavedFilter = {
     dueFilter?: string
   }
 }
-type BoardInvitation = { id: string; email: string; role: string; status: string; createdAt: string | Date }
-type ArchiveSnapshot = {
-  board: { id: string; title: string; isArchived: boolean }
-  lists: Array<{ id: string; title: string; updatedAt: string | Date }>
-  cards: Array<{ id: string; title: string; listId: string; listTitle: string; updatedAt: string | Date }>
-}
 type SelectOption = { value: string; label: string; hint?: string }
+type UndoAction = { id: string; label: string; onUndo: () => Promise<void> }
 
 const viewOptions = [...BOARD_VIEWS]
 const dueFilterOptions: SelectOption[] = [
@@ -141,6 +138,39 @@ function statusLabel(value: string) {
   return value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (char) => char.toUpperCase())
 }
 
+function EmptyBoardState({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string
+  description: string
+  actionLabel?: string
+  onAction?: () => void
+}) {
+  return (
+    <Card className="empty-glow app-rise border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,13,24,0.82))] text-white">
+      <div className="py-12 text-center">
+        <div className="empty-orbit mx-auto mb-6 grid h-24 w-24 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+          <Sparkles className="h-9 w-9 text-cyan-200/90" />
+        </div>
+        <p className="text-2xl font-semibold">{title}</p>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-white/58">{description}</p>
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            className="micro-bounce mt-6 rounded-full border border-white/10 bg-white/[0.05] px-5 py-3 text-sm text-white/78 transition hover:bg-white/[0.1] hover:text-white"
+            onClick={onAction}
+          >
+            {actionLabel}
+          </button>
+        ) : null}
+      </div>
+    </Card>
+  )
+}
+
 function findListByCard(lists: BoardList[], cardId: string) {
   return lists.find((list) => list.cards.some((card) => card.id === cardId))
 }
@@ -199,7 +229,7 @@ function AnimatedSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          'group flex w-full items-center justify-between gap-3 rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm',
+          'app-panel micro-bounce group flex w-full items-center justify-between gap-3 rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm',
           open ? 'border-cyan-300/40 bg-[linear-gradient(180deg,rgba(45,112,255,0.2),rgba(255,255,255,0.05))] shadow-[0_16px_40px_rgba(15,23,42,0.35)]' : 'hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07]'
         )}
         onClick={() => setOpen((current) => !current)}
@@ -360,17 +390,31 @@ function DatePickerField({
   )
 }
 
-function SortableCard({ card, onOpen, isFocused }: { card: BoardCard; onOpen: (card: BoardCard) => void; isFocused: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: 'card' } })
+function SortableCard({
+  card,
+  onOpen,
+  isFocused,
+  cardIndex,
+  isSelected,
+  onToggleSelected,
+}: {
+  card: BoardCard
+  onOpen: (card: BoardCard) => void
+  isFocused: boolean
+  cardIndex: number
+  isSelected: boolean
+  onToggleSelected: (cardId: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { type: 'card', card } })
   const checklistTotal = card.checklistProgress.total || 0
   const checklistCompleted = card.checklistProgress.completed
   const checklistPercent = checklistTotal ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
   return (
     <button
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.65 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.65 : 1, animationDelay: `${cardIndex * 34}ms` }}
       suppressHydrationWarning
-      className={`hover-lift group relative w-full overflow-hidden rounded-[1.5rem] border p-4 text-left transition ${isFocused ? 'border-cyan-400/50 ring-2 ring-cyan-400/20 shadow-[0_24px_60px_rgba(8,145,178,0.18)]' : 'border-white/10'} bg-[linear-gradient(180deg,rgba(11,18,33,0.96),rgba(7,12,24,0.92))]`}
+      className={`app-stagger hover-lift app-panel group relative w-full overflow-hidden rounded-[1.5rem] border p-4 text-left transition ${isFocused ? 'border-cyan-400/50 ring-2 ring-cyan-400/20 shadow-[0_24px_60px_rgba(8,145,178,0.18)]' : 'border-white/10'} bg-[linear-gradient(180deg,rgba(11,18,33,0.96),rgba(7,12,24,0.92))]`}
       onClick={() => onOpen(card)}
       {...attributes}
       {...listeners}
@@ -379,7 +423,22 @@ function SortableCard({ card, onOpen, isFocused }: { card: BoardCard; onOpen: (c
       {card.coverColor ? <div className="mb-3 h-2 rounded-full" style={{ backgroundColor: card.coverColor }} /> : null}
       <div className="relative flex items-start justify-between gap-3">
         <p className="font-semibold text-white">{card.title}</p>
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white/50 transition group-hover:border-cyan-200/20 group-hover:bg-cyan-400/10 group-hover:text-cyan-100">{statusLabel(card.priority)}</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={cn(
+              'grid h-7 w-7 place-items-center rounded-full border transition',
+              isSelected ? 'border-cyan-300/35 bg-cyan-400/18 text-cyan-100' : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20 hover:text-white'
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleSelected(card.id)
+            }}
+          >
+            {isSelected ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          </button>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white/50 transition group-hover:border-cyan-200/20 group-hover:bg-cyan-400/10 group-hover:text-cyan-100">{statusLabel(card.priority)}</span>
+        </div>
       </div>
       {card.labels.length ? <div className="relative mt-3 flex flex-wrap gap-2">{card.labels.slice(0, 2).map((label) => <span key={label.id} className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white" style={{ backgroundColor: label.color }}>{label.name}</span>)}</div> : null}
       {card.description ? <p className="relative mt-3 text-sm leading-6 text-white/58">{card.description}</p> : null}
@@ -480,6 +539,9 @@ function SortableList({
   onRenameList,
   onDeleteList,
   onOpenCard,
+  listIndex,
+  selectedCardIds,
+  onToggleSelectedCard,
 }: {
   list: BoardList
   canMutate: boolean
@@ -488,13 +550,16 @@ function SortableList({
   onRenameList: (listId: string, title: string) => Promise<void>
   onDeleteList: (listId: string) => Promise<void>
   onOpenCard: (card: BoardCard) => void
+  listIndex: number
+  selectedCardIds: string[]
+  onToggleSelectedCard: (cardId: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: list.id, data: { type: 'list' }, disabled: !canMutate })
   const [title, setTitle] = useState(list.title)
   const [newCardTitle, setNewCardTitle] = useState('')
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="glass-ring stagger-rise w-[340px] shrink-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,33,0.96),rgba(8,14,26,0.9))] p-4">
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, animationDelay: `${listIndex * 54}ms` }} className="glass-ring app-rise app-panel w-[340px] shrink-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,33,0.96),rgba(8,14,26,0.9))] p-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex-1">
           <input className="w-full rounded-xl border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-white outline-none" disabled={!canMutate} value={title} onChange={(event) => setTitle(event.target.value)} onBlur={() => { if (canMutate && title.trim() !== list.title) void onRenameList(list.id, title.trim()) }} />
@@ -508,7 +573,7 @@ function SortableList({
         ) : null}
       </div>
       <SortableContext items={list.cards.map((card) => card.id)} strategy={rectSortingStrategy}>
-        <div className="space-y-3">{list.cards.map((card) => <SortableCard key={card.id} card={card} isFocused={card.id === focusedCardId} onOpen={onOpenCard} />)}</div>
+        <div className="space-y-3">{list.cards.map((card, cardIndex) => <SortableCard key={card.id} card={card} cardIndex={cardIndex} isFocused={card.id === focusedCardId} isSelected={selectedCardIds.includes(card.id)} onToggleSelected={onToggleSelectedCard} onOpen={onOpenCard} />)}</div>
       </SortableContext>
       {canMutate ? (
         <div className="mt-4 space-y-3 rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-3">
@@ -854,6 +919,24 @@ function CardModal({
                 </div>
                 {canMutate ? <div className="mt-4 space-y-3"><textarea className="min-h-24 w-full rounded-[1.35rem] border border-white/10 bg-slate-950/70 px-4 py-3 outline-none" placeholder="Adicionar comentario. Use @username para mencoes." value={comment} onChange={(event) => setComment(event.target.value)} /><Button onClick={() => { if (!comment.trim()) return; void onComment(comment.trim()); setComment('') }}>Comentar</Button></div> : null}
               </section>
+
+              <section className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.028))] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-medium">Historico do card</h3>
+                  <span className="text-sm text-white/45">{card.activity.length} eventos</span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {card.activity.length ? card.activity.map((item) => (
+                    <div key={item.id} className="rounded-[1.2rem] border border-white/10 bg-slate-950/60 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium">{item.user.name}</p>
+                        <span className="text-[11px] uppercase tracking-[0.18em] text-white/35">{formatDate(item.createdAt)}</span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-white/62">{item.message}</p>
+                    </div>
+                  )) : <div className="rounded-[1.2rem] border border-dashed border-white/10 px-4 py-5 text-sm text-white/40">Nenhum evento deste card ainda.</div>}
+                </div>
+              </section>
             </div>
 
             <aside className="space-y-4">
@@ -929,7 +1012,7 @@ function CardModal({
                   ))}
                 </div>
               </div>
-              {canMutate ? <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.028))] p-5"><div className="grid gap-3"><Button onClick={() => void onSave({ title: draft.title, description: draft.description || null, priority: draft.priority, status: draft.status, dueDate: draft.dueDate || null, startDate: draft.startDate || null, reminderAt: draft.reminderAt || null, coverColor: draft.coverColor, memberIds: draft.memberIds, labelIds: draft.labelIds, checklist: draft.checklist }).then(() => { lastSavedChecklistSnapshotRef.current = JSON.stringify(draft.checklist); lastSavedMetaSnapshotRef.current = metaSnapshot })}>Salvar alteracoes</Button><Button variant="secondary" onClick={() => void onDelete()}>Excluir card</Button></div></div> : null}
+              {canMutate ? <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.028))] p-5"><div className="grid gap-3"><Button onClick={() => void onSave({ title: draft.title, description: draft.description || null, priority: draft.priority, status: draft.status, dueDate: draft.dueDate || null, startDate: draft.startDate || null, reminderAt: draft.reminderAt || null, coverColor: draft.coverColor, memberIds: draft.memberIds, labelIds: draft.labelIds, checklist: draft.checklist }).then(() => { lastSavedChecklistSnapshotRef.current = JSON.stringify(draft.checklist); lastSavedMetaSnapshotRef.current = metaSnapshot })}>Salvar alteracoes</Button><Button variant="secondary" onClick={() => void onDelete()}>Arquivar card</Button></div></div> : null}
             </aside>
           </div>
         </div>
@@ -964,12 +1047,11 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
   const [labelFilter, setLabelFilter] = useState('')
   const [dueFilter, setDueFilter] = useState('ALL')
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([])
-  const [boardMembers, setBoardMembers] = useState<BoardMember[]>(initialBoard.members)
-  const [availableMembers, setAvailableMembers] = useState<BoardMember[]>([])
-  const [boardInvitations, setBoardInvitations] = useState<BoardInvitation[]>([])
-  const [archiveSnapshot, setArchiveSnapshot] = useState<ArchiveSnapshot | null>(null)
   const [newListTitle, setNewListTitle] = useState('')
   const [selectedCardId, setSelectedCardId] = useState<string | null>(initialSelectedCardId)
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([])
+  const [activeDragCard, setActiveDragCard] = useState<BoardCard | null>(null)
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null)
   const [focusedCardIndex, setFocusedCardIndex] = useState(0)
   const [quickOpen, setQuickOpen] = useState(false)
   const [quickTitle, setQuickTitle] = useState('')
@@ -979,7 +1061,6 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const currentMember = board.members.find((member) => member.id === currentUserId)
   const canMutate = currentMember?.role !== 'VIEWER'
-  const canManageBoard = currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN'
 
   const refreshBoard = async () => {
     const response = await fetch(`/api/boards/${board.id}`)
@@ -994,6 +1075,28 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
   useEffect(() => {
     return subscribeToBoard(board.id, handleBoardUpdated)
   }, [board.id])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadSavedFilters() {
+      const response = await fetch(`/api/boards/${board.id}/filters`)
+      const data = await response.json().catch(() => null)
+      if (!response.ok || !active) return
+      setSavedFilters(Array.isArray(data?.filters) ? data.filters : [])
+    }
+
+    void loadSavedFilters()
+    return () => {
+      active = false
+    }
+  }, [board.id])
+
+  useEffect(() => {
+    if (!undoAction) return
+    const timeoutId = window.setTimeout(() => setUndoAction(null), 6000)
+    return () => window.clearTimeout(timeoutId)
+  }, [undoAction])
 
   const selectedCard = useMemo(() => board.lists.flatMap((list) => list.cards).find((card) => card.id === selectedCardId) ?? null, [board.lists, selectedCardId])
   const filteredLists = useMemo(() => {
@@ -1012,6 +1115,11 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
     }))
   }, [board.lists, deferredSearch, memberFilter, priorityFilter, labelFilter, dueFilter])
   const filteredCards = filteredLists.flatMap((list) => list.cards)
+  const visibleCardIds = filteredCards.map((card) => card.id)
+  const allCardIds = useMemo(() => new Set(board.lists.flatMap((list) => list.cards.map((card) => card.id))), [board.lists])
+  const effectiveSelectedCardIds = selectedCardIds.filter((id) => allCardIds.has(id))
+  const hasBoardContent = board.lists.length > 0
+  const hasFilteredResults = filteredCards.length > 0
   const clampedFocusedIndex = filteredCards.length ? Math.min(focusedCardIndex, filteredCards.length - 1) : 0
   const effectiveFocusedCardId = filteredCards.length ? filteredCards[clampedFocusedIndex]?.id ?? null : null
   const memberOptions = [{ value: '', label: 'Todos membros', hint: 'Sem filtro por responsavel' }, ...board.members.map((member) => ({ value: member.id, label: member.name, hint: `@${member.username}` }))]
@@ -1030,6 +1138,52 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
     setPriorityFilter('')
     setLabelFilter('')
     setDueFilter('ALL')
+  }
+
+  function applySavedFilter(filter: SavedFilter) {
+    setSearch(filter.filters.search ?? '')
+    setMemberFilter(filter.filters.memberFilter ?? '')
+    setPriorityFilter(filter.filters.priorityFilter ?? '')
+    setLabelFilter(filter.filters.labelFilter ?? '')
+    setDueFilter(filter.filters.dueFilter ?? 'ALL')
+  }
+
+  async function saveCurrentFilter(name: string) {
+    const response = await fetch(`/api/boards/${board.id}/filters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        filters: {
+          search,
+          memberFilter,
+          priorityFilter,
+          labelFilter,
+          dueFilter,
+        },
+      }),
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) return
+    setSavedFilters((current) => [data.filter, ...current])
+  }
+
+  async function deleteSavedFilter(filterId: string) {
+    const response = await fetch(`/api/boards/${board.id}/filters`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferenceId: filterId }),
+    })
+    if (!response.ok) return
+    setSavedFilters((current) => current.filter((item) => item.id !== filterId))
+  }
+
+  function toggleSelectedCard(cardId: string) {
+    setSelectedCardIds((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId])
+  }
+
+  function setUndo(label: string, onUndo: () => Promise<void>) {
+    setUndoAction({ id: createLocalId('undo'), label, onUndo })
   }
 
   async function moveSelectedCard(direction: 'left' | 'right') {
@@ -1089,8 +1243,15 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
   }
 
   async function deleteCard(cardId: string) {
-    const response = await fetch(`/api/cards/${cardId}`, { method: 'DELETE' })
-    if (response.ok) { setSelectedCardId(null); await refreshBoard() }
+    const response = await fetch(`/api/cards/${cardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isArchived: true }) })
+    if (response.ok) {
+      setSelectedCardId(null)
+      setSelectedCardIds((current) => current.filter((id) => id !== cardId))
+      setUndo('Card arquivado.', async () => {
+        await saveCard(cardId, { isArchived: false })
+      })
+      await refreshBoard()
+    }
   }
 
   async function addComment(cardId: string, content: string) {
@@ -1135,7 +1296,33 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
     }
   }
 
+  async function applyBulkPriority(nextPriority: string) {
+    if (!effectiveSelectedCardIds.length) return
+    await Promise.all(effectiveSelectedCardIds.map((cardId) => saveCard(cardId, { priority: nextPriority })))
+    await refreshBoard()
+  }
+
+  async function archiveSelectedCards() {
+    if (!effectiveSelectedCardIds.length) return
+    const archivedIds = [...effectiveSelectedCardIds]
+    await Promise.all(archivedIds.map((cardId) => saveCard(cardId, { isArchived: true })))
+    setSelectedCardIds([])
+    setUndo(`${archivedIds.length} card${archivedIds.length > 1 ? 's arquivados.' : ' arquivado.'}`, async () => {
+      await Promise.all(archivedIds.map((cardId) => saveCard(cardId, { isArchived: false })))
+    })
+    await refreshBoard()
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const activeType = event.active.data.current?.type as 'list' | 'card' | undefined
+    if (activeType === 'card') {
+      const card = event.active.data.current?.card as BoardCard | undefined
+      setActiveDragCard(card ?? null)
+    }
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
+    setActiveDragCard(null)
     if (!canMutate) return
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -1249,7 +1436,7 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
           <Card className="glass-ring fade-up relative z-30 isolate border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(7,13,25,0.86))] text-white">
             <div className="space-y-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex flex-wrap gap-3">{viewOptions.map((option) => <button key={option} className={cn('rounded-full border px-4 py-2.5 text-sm transition duration-200', board.defaultView === option ? 'border-cyan-300/20 bg-[linear-gradient(135deg,#3b82f6,#2563eb)] text-white shadow-[0_16px_35px_rgba(37,99,235,0.34)]' : 'border-white/10 bg-white/[0.04] text-white/65 hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white')} onClick={() => void persistView(option)}>{statusLabel(option)}</button>)}</div>
+                <div className="flex flex-wrap gap-3">{viewOptions.map((option) => <button key={option} className={cn('micro-bounce rounded-full border px-4 py-2.5 text-sm transition duration-200', board.defaultView === option ? 'border-cyan-300/20 bg-[linear-gradient(135deg,#3b82f6,#2563eb)] text-white shadow-[0_16px_35px_rgba(37,99,235,0.34)]' : 'border-white/10 bg-white/[0.04] text-white/65 hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.07] hover:text-white')} onClick={() => void persistView(option)}>{statusLabel(option)}</button>)}</div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
                   <span className="rounded-full border border-cyan-300/14 bg-cyan-400/8 px-3 py-1.5 text-cyan-100/88">{filteredCards.length} cards visiveis</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{activeFilterCount} filtros ativos</span>
@@ -1257,7 +1444,7 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
                 </div>
               </div>
               <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,0.78fr))]">
-                <div className="rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="app-panel micro-bounce rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                   <div className="flex items-center gap-3">
                     <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-white/62">
                       <Search className="h-4 w-4" />
@@ -1281,24 +1468,108 @@ export function BoardScreen({ initialBoard, currentUserId, initialSelectedCardId
                   </span>
                   <p>/ busca, Ctrl/Cmd + K acoes rapidas, Ctrl/Cmd + L nova lista, Shift + setas move card, Enter abre.</p>
                 </div>
-                {canMutate ? <div className="flex w-full gap-3 md:w-auto md:min-w-[360px]"><input className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none" placeholder="Nova lista" value={newListTitle} onChange={(event) => setNewListTitle(event.target.value)} /><Button onClick={() => void createList(newListTitle.trim())}>Criar lista</Button></div> : null}
+                {canMutate ? <div className="flex w-full gap-3 md:w-auto md:min-w-[360px]"><input className="micro-bounce w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none" placeholder="Nova lista" value={newListTitle} onChange={(event) => setNewListTitle(event.target.value)} /><Button onClick={() => void createList(newListTitle.trim())}>Criar lista</Button></div> : null}
               </div>
+              {canMutate ? <div className="flex flex-col gap-3 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4 xl:flex-row xl:items-center xl:justify-between"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-white/10 bg-black/15 px-3 py-1.5 text-xs text-white/60">{effectiveSelectedCardIds.length} selecionados</span><button className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/72 hover:bg-white/[0.08] hover:text-white" onClick={() => setSelectedCardIds(visibleCardIds)}>Selecionar visiveis</button><button className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/72 hover:bg-white/[0.08] hover:text-white" onClick={() => setSelectedCardIds([])}>Limpar selecao</button></div>{effectiveSelectedCardIds.length ? <div className="flex flex-wrap items-center gap-2"><button className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/72 hover:bg-white/[0.08] hover:text-white" onClick={() => void applyBulkPriority('HIGH')}>Alta</button><button className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/72 hover:bg-white/[0.08] hover:text-white" onClick={() => void applyBulkPriority('MEDIUM')}>Media</button><button className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/72 hover:bg-white/[0.08] hover:text-white" onClick={() => void applyBulkPriority('LOW')}>Baixa</button><button className="rounded-full border border-rose-400/18 bg-rose-500/8 px-3 py-1.5 text-xs text-rose-100/80 hover:bg-rose-500/15" onClick={() => void archiveSelectedCards()}>Arquivar selecionados</button></div> : <p className="text-xs text-white/42">Use o seletor de cada card para aplicar prioridade em lote ou arquivar com desfazer.</p>}</div> : null}
             </div>
           </Card>
-          {board.defaultView === 'KANBAN' ? <div className="overflow-x-auto pb-5"><DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={(event) => void handleDragEnd(event)}><SortableContext items={board.lists.map((list) => list.id)} strategy={horizontalListSortingStrategy}><div className="flex min-h-[640px] items-start gap-5 pt-1">{filteredLists.map((list, index) => <div key={list.id} style={{ animationDelay: `${index * 70}ms` }}><SortableList list={list} canMutate={Boolean(canMutate)} focusedCardId={effectiveFocusedCardId} onCreateCard={createCard} onRenameList={renameList} onDeleteList={deleteList} onOpenCard={(card) => { const nextIndex = filteredCards.findIndex((item) => item.id === card.id); if (nextIndex >= 0) setFocusedCardIndex(nextIndex); setSelectedCardId(card.id) }} /></div>)}</div></SortableContext></DndContext></div> : null}
+          {board.defaultView === 'KANBAN' ? (
+            !hasBoardContent ? (
+              <EmptyBoardState
+                title="Este board ainda nao tem listas"
+                description="Crie a primeira lista para começar a distribuir cards, prioridades e fluxo de trabalho aqui dentro."
+                actionLabel={canMutate ? 'Criar primeira lista' : undefined}
+                onAction={canMutate ? () => void createList('Primeira lista') : undefined}
+              />
+            ) : !hasFilteredResults ? (
+              <EmptyBoardState
+                title="Nenhum card bate com os filtros atuais"
+                description="A busca e os filtros zeraram o resultado. Ajuste os critérios ou limpe os filtros para recuperar o quadro."
+                actionLabel={activeFilterCount ? 'Limpar filtros' : undefined}
+                onAction={activeFilterCount ? resetFilters : undefined}
+              />
+            ) : (
+              <div className="overflow-x-auto pb-5">
+                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragCancel={() => setActiveDragCard(null)} onDragEnd={(event) => void handleDragEnd(event)}>
+                  <SortableContext items={board.lists.map((list) => list.id)} strategy={horizontalListSortingStrategy}>
+                    <div className="flex min-h-[640px] items-start gap-5 pt-1">
+                      {filteredLists.map((list, index) => (
+                        <div key={list.id}>
+                          <SortableList list={list} listIndex={index} canMutate={Boolean(canMutate)} focusedCardId={effectiveFocusedCardId} selectedCardIds={selectedCardIds} onToggleSelectedCard={toggleSelectedCard} onCreateCard={createCard} onRenameList={renameList} onDeleteList={deleteList} onOpenCard={(card) => { const nextIndex = filteredCards.findIndex((item) => item.id === card.id); if (nextIndex >= 0) setFocusedCardIndex(nextIndex); setSelectedCardId(card.id) }} />
+                        </div>
+                      ))}
+                    </div>
+                  </SortableContext>
+                  <DragOverlay adjustScale={false}>
+                    {activeDragCard ? <DraggingCardOverlay card={activeDragCard} /> : null}
+                  </DragOverlay>
+                </DndContext>
+              </div>
+            )
+          ) : null}
           {board.defaultView === 'LIST' ? <Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-white/42"><tr><th className="pb-3">Card</th><th className="pb-3">Lista</th><th className="pb-3">Prioridade</th><th className="pb-3">Prazo</th></tr></thead><tbody>{filteredLists.flatMap((list) => list.cards.map((card) => <tr key={card.id} className="border-t border-white/10"><td className="py-4"><button className="font-medium hover:text-cyan-200" onClick={() => setSelectedCardId(card.id)}>{card.title}</button></td><td className="py-4 text-white/58">{list.title}</td><td className="py-4 text-white/58">{statusLabel(card.priority)}</td><td className="py-4 text-white/58">{formatDate(card.dueDate)}</td></tr>))}</tbody></table></div></Card> : null}
           {board.defaultView === 'CALENDAR' ? <div className="grid gap-4 md:grid-cols-3">{filteredCards.filter((card) => card.dueDate).map((card) => <Card key={card.id} className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><button className="w-full text-left" onClick={() => setSelectedCardId(card.id)}><p className="text-xs uppercase tracking-[0.22em] text-white/40">{formatDate(card.dueDate)}</p><p className="mt-3 text-lg font-semibold">{card.title}</p><p className="mt-2 text-sm text-white/55">{card.description || 'Sem descricao.'}</p></button></Card>)}</div> : null}
           {board.defaultView === 'TIMELINE' ? <Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><div className="space-y-4">{filteredCards.filter((card) => card.startDate || card.dueDate).map((card, index) => <div key={card.id} className="grid gap-4 md:grid-cols-[220px_1fr]"><button className="text-left font-medium hover:text-cyan-200" onClick={() => setSelectedCardId(card.id)}>{card.title}</button><div className="rounded-full border border-white/10 bg-black/10 p-2"><div className="h-6 rounded-full bg-[linear-gradient(90deg,#22d3ee,#3b82f6,#8b5cf6)]" style={{ width: `${28 + (index % 6) * 10}%` }} /></div></div>)}</div></Card> : null}
-          {board.defaultView === 'DASHBOARD' ? <div className="grid gap-6 lg:grid-cols-3"><Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Cards filtrados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.length}</p></Card><Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Atrasados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => isOverdueCard(card)).length}</p></Card><Card className="border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Concluidos</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => card.status === 'DONE').length}</p></Card></div> : null}
+          {board.defaultView === 'DASHBOARD' ? (
+            hasFilteredResults ? (
+              <div className="grid gap-6 lg:grid-cols-3">
+                <Card className="app-rise app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white"><p className="text-sm uppercase tracking-[0.22em] text-white/42">Cards filtrados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.length}</p></Card>
+                <Card className="app-rise app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white" style={{ animationDelay: '40ms' }}><p className="text-sm uppercase tracking-[0.22em] text-white/42">Atrasados</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => isOverdueCard(card)).length}</p></Card>
+                <Card className="app-rise app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.9),rgba(8,14,25,0.82))] text-white" style={{ animationDelay: '80ms' }}><p className="text-sm uppercase tracking-[0.22em] text-white/42">Concluidos</p><p className="mt-4 text-5xl font-semibold">{filteredCards.filter((card) => card.status === 'DONE').length}</p></Card>
+              </div>
+            ) : (
+              <EmptyBoardState
+                title="O dashboard ainda nao tem sinal suficiente"
+                description="Assim que esse board tiver cards ativos, prazos ou progresso, o resumo executivo aparece aqui com mais valor."
+                actionLabel={activeFilterCount ? 'Limpar filtros' : undefined}
+                onAction={activeFilterCount ? resetFilters : undefined}
+              />
+            )
+          ) : null}
         </div>
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <SavedFiltersPanel savedFilters={savedFilters} canMutate={Boolean(canMutate)} onApply={applySavedFilter} onSave={saveCurrentFilter} onDelete={deleteSavedFilter} />
           <Card className="glass-ring fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,14,25,0.82))] text-white"><div className="flex items-center justify-between gap-3"><p className="text-sm uppercase tracking-[0.24em] text-white/42">Membros do board</p><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">{board.members.length}</span></div><div className="mt-4 space-y-3">{board.members.map((member) => <div key={member.id} className="hover-lift rounded-[1.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] px-3 py-3"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl text-sm font-semibold text-white shadow-[0_14px_30px_rgba(15,23,42,0.28)]" style={{ backgroundColor: member.avatarColor }}>{member.name.slice(0, 2).toUpperCase()}</span><div><p className="font-medium">{member.name}</p><p className="text-sm text-white/45">@{member.username} {member.role ? `• ${member.role}` : ''}</p></div></div></div>)}</div></Card>
-          <Card className="glass-ring fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,14,25,0.82))] text-white"><div className="flex items-center justify-between gap-3"><p className="text-sm uppercase tracking-[0.24em] text-white/42">Atividade recente</p><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">{board.activity.length}</span></div><div className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">{board.activity.map((item) => <div key={item.id} className="hover-lift rounded-[1.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4"><p className="text-sm font-semibold">{item.user.name}</p><p className="mt-2 text-sm leading-6 text-white/58">{item.message}</p></div>)}</div></Card>
+          <Card className="glass-ring fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,31,0.92),rgba(8,14,25,0.82))] text-white"><div className="flex items-center justify-between gap-3"><p className="text-sm uppercase tracking-[0.24em] text-white/42">Atividade recente</p><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">{board.activity.length}</span></div><div className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">{board.activity.map((item) => <div key={item.id} className="hover-lift rounded-[1.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4"><p className="text-sm font-semibold">{item.user.name}</p><p className="mt-2 text-sm leading-6 text-white/58">{item.message}</p><p className="mt-2 text-xs uppercase tracking-[0.2em] text-white/32">{formatDate(item.createdAt)}</p></div>)}</div></Card>
         </aside>
       </div>
 
       {quickOpen && canMutate ? <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><div className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#0b1528] p-6 text-white"><div className="flex items-center justify-between gap-4"><div><p className="text-sm uppercase tracking-[0.24em] text-white/40">Acoes rapidas</p><h3 className="mt-2 text-2xl font-semibold">Criar sem perder contexto</h3></div><button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm" onClick={() => setQuickOpen(false)}>Fechar</button></div><div className="mt-5 space-y-4"><input className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3" placeholder="Titulo do card" value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} /><select className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3" value={quickListId} onChange={(event) => setQuickListId(event.target.value)}><option value="">Escolha a lista</option>{board.lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select><Button className="w-full" onClick={() => { if (!quickListId || !quickTitle.trim()) return; void createCard(quickListId, quickTitle.trim()).then(() => { setQuickOpen(false); setQuickTitle(''); setQuickListId('') }) }}>Criar agora</Button></div></div></div> : null}
       {selectedCard ? <CardModal key={selectedCard.id} card={selectedCard} boardMembers={board.members} boardLabels={board.labels} canMutate={Boolean(canMutate)} onClose={() => setSelectedCardId(null)} onSave={async (payload) => { await saveCard(selectedCard.id, payload) }} onDelete={async () => { await deleteCard(selectedCard.id) }} onComment={async (content) => { await addComment(selectedCard.id, content) }} onUpdateComment={async (commentId, content) => { await updateComment(commentId, content) }} onDeleteComment={async (commentId) => { await deleteComment(commentId) }} onUploadAttachment={async (file) => { await uploadAttachment(selectedCard.id, file) }} onDeleteAttachment={async (attachmentId) => { await deleteAttachment(attachmentId) }} /> : null}
+      {undoAction ? <div className="app-fade fixed bottom-5 right-5 z-[75] max-w-md rounded-[1.4rem] border border-white/10 bg-[#091425] p-4 text-white shadow-[0_26px_90px_rgba(0,0,0,0.42)]"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium">{undoAction.label}</p><p className="mt-1 text-xs text-white/45">Voce pode desfazer esta acao por alguns segundos.</p></div><button className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-white/55 hover:bg-white/[0.08] hover:text-white" onClick={() => setUndoAction(null)}><X className="h-4 w-4" /></button></div><div className="mt-4 flex items-center justify-end gap-2"><Button variant="secondary" onClick={() => setUndoAction(null)}>Fechar</Button><Button onClick={() => void undoAction.onUndo().then(() => setUndoAction(null))}>Desfazer</Button></div></div> : null}
     </>
+  )
+}
+
+function DraggingCardOverlay({ card }: { card: BoardCard }) {
+  const checklistTotal = card.checklistProgress.total || 0
+  const checklistCompleted = card.checklistProgress.completed
+  const checklistPercent = checklistTotal ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
+
+  return (
+    <div className="w-[320px] rotate-[1.2deg] overflow-hidden rounded-[1.5rem] border border-cyan-300/24 bg-[linear-gradient(180deg,rgba(11,18,33,0.98),rgba(7,12,24,0.96))] p-4 text-left text-white shadow-[0_28px_90px_rgba(8,145,178,0.22)]">
+      {card.coverColor ? <div className="mb-3 h-2 rounded-full" style={{ backgroundColor: card.coverColor }} /> : null}
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-semibold text-white">{card.title}</p>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white/50">{statusLabel(card.priority)}</span>
+      </div>
+      {card.labels.length ? <div className="mt-3 flex flex-wrap gap-2">{card.labels.slice(0, 2).map((label) => <span key={label.id} className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white" style={{ backgroundColor: label.color }}>{label.name}</span>)}</div> : null}
+      {card.description ? <p className="mt-3 text-sm leading-6 text-white/58">{card.description}</p> : null}
+      {checklistTotal ? (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between text-[11px] text-white/45">
+            <span>Checklist</span>
+            <span>{checklistCompleted}/{checklistTotal}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#3b82f6)]" style={{ width: `${checklistPercent}%` }} />
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-4 flex items-center justify-between text-xs text-white/45">
+        <span>{card.comments.length} comentarios</span>
+        <span>{formatDate(card.dueDate)}</span>
+      </div>
+    </div>
   )
 }

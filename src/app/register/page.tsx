@@ -10,27 +10,34 @@ const cards = [
   ['Escalavel', 'Arquitetura preparada para filtros, analytics, automacoes e notificacoes.'],
 ]
 
-export default async function RegisterPage() {
+interface RegisterPageProps {
+  searchParams: Promise<{ callbackUrl?: string }>
+}
+
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const session = await auth()
   if (session?.user?.id) redirect('/app')
+  const { callbackUrl } = await searchParams
+  const loginHref = callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-10">
       <div className="hero-orb absolute left-[14%] top-28 h-80 w-80 rounded-full bg-emerald-500/12 blur-3xl" />
       <div className="hero-orb-delayed absolute right-[10%] top-20 h-72 w-72 rounded-full bg-blue-500/12 blur-3xl" />
+      <div className="hero-orb-slow absolute left-[48%] top-[16%] h-44 w-44 rounded-full bg-cyan-500/10 blur-3xl" />
 
       <div className="grid w-full max-w-6xl gap-10 lg:grid-cols-[430px_1fr]">
-        <div className="fade-up flex flex-col items-center justify-center gap-5">
+        <div className="fade-up floating-card flex flex-col items-center justify-center gap-5">
           <RegisterForm />
           <p className="text-sm text-white/55">
             Ja tem conta?{' '}
-            <Link className="text-cyan-300 transition hover:text-cyan-200" href="/login">
+            <Link className="text-cyan-300 transition hover:text-cyan-200" href={loginHref}>
               Entrar
             </Link>
           </p>
         </div>
 
-        <section className="fade-up rounded-[2.2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(10,23,45,.96),rgba(20,43,82,.82))] p-8 shadow-[0_34px_90px_rgba(0,0,0,0.28)] lg:p-12" style={{ animationDelay: '100ms' }}>
+        <section className="fade-up ambient-panel rounded-[2.2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(10,23,45,.96),rgba(20,43,82,.82))] p-8 shadow-[0_34px_90px_rgba(0,0,0,0.28)] lg:p-12" style={{ animationDelay: '100ms' }}>
           <p className="text-sm uppercase tracking-[0.35em] text-emerald-300/70">Alquimia Tarefas</p>
           <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-tight">
             Crie a conta e receba uma base pronta para comecar organizando.
@@ -42,7 +49,7 @@ export default async function RegisterPage() {
             {cards.map(([title, description], index) => (
               <div
                 key={title}
-                className="stagger-rise rounded-[1.5rem] border border-white/10 bg-black/15 p-5"
+                className="stagger-rise spotlight-card rounded-[1.5rem] border border-white/10 bg-black/15 p-5"
                 style={{ animationDelay: `${index * 100 + 160}ms` }}
               >
                 <h2 className="font-medium">{title}</h2>

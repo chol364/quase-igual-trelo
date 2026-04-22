@@ -53,12 +53,13 @@ export default async function AppDashboardPage() {
   })
 
   const totalBoards = memberships.reduce((acc, item) => acc + item.workspace.boards.length, 0)
+  const highlightedBoards = favoriteBoards.length ? favoriteBoards : recentBoards.slice(0, 4)
 
   return (
     <AppShell user={session.user}>
       <div className="space-y-8">
         <section className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-          <Card className="fade-up relative overflow-hidden border-white/10 bg-[linear-gradient(145deg,rgba(10,22,42,.96),rgba(22,34,67,.88))] text-white">
+          <Card className="fade-up ambient-panel relative overflow-hidden border-white/10 bg-[linear-gradient(145deg,rgba(10,22,42,.96),rgba(22,34,67,.88))] text-white">
             <div className="absolute -right-10 top-0 h-44 w-44 rounded-full bg-cyan-400/15 blur-3xl" />
             <div className="absolute bottom-0 left-1/3 h-32 w-48 rounded-full bg-fuchsia-500/12 blur-3xl" />
             <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
@@ -87,11 +88,11 @@ export default async function AppDashboardPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.06] px-5 py-4">
+                <div className="app-panel app-rise rounded-[1.35rem] border border-white/10 bg-white/[0.06] px-5 py-4">
                   <p className="text-sm text-white/50">Espacos ativos</p>
                   <p className="mt-2 text-3xl font-semibold">{memberships.length}</p>
                 </div>
-                <div className="rounded-[1.35rem] border border-white/10 bg-black/15 px-5 py-4">
+                <div className="app-panel app-rise rounded-[1.35rem] border border-white/10 bg-black/15 px-5 py-4">
                   <p className="text-sm text-white/50">Boards no radar</p>
                   <p className="mt-2 text-3xl font-semibold">{totalBoards}</p>
                 </div>
@@ -99,7 +100,7 @@ export default async function AppDashboardPage() {
             </div>
           </Card>
 
-          <Card className="fade-up border-white/10 bg-[linear-gradient(180deg,rgba(11,18,31,0.92),rgba(8,13,24,0.82))] text-white" style={{ animationDelay: '100ms' }}>
+          <Card className="fade-up app-panel border-white/10 bg-[linear-gradient(180deg,rgba(11,18,31,0.92),rgba(8,13,24,0.82))] text-white" style={{ animationDelay: '100ms' }}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.3em] text-emerald-300/75">Prazos proximos</p>
@@ -126,8 +127,12 @@ export default async function AppDashboardPage() {
                   </Link>
                 ))
               ) : (
-                <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-white/[0.03] px-4 py-7 text-sm text-white/52">
-                  Nenhum card atribuido com prazo proximo no momento.
+                <div className="empty-glow app-rise rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-white/52">
+                  <div className="empty-orbit mx-auto mb-5 grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+                    <span className="text-2xl">+</span>
+                  </div>
+                  <p className="font-medium text-white/78">Nenhum prazo proximo por aqui</p>
+                  <p className="mt-2 leading-6">Quando voce assumir cards com data, eles entram neste radar automaticamente.</p>
                 </div>
               )}
             </div>
@@ -135,7 +140,7 @@ export default async function AppDashboardPage() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <Card className="fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,30,0.92),rgba(8,13,24,0.82))] text-white" style={{ animationDelay: '140ms' }}>
+          <Card className="fade-up app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,30,0.92),rgba(8,13,24,0.82))] text-white" style={{ animationDelay: '140ms' }}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm text-white/45">Boards destacados</p>
@@ -146,41 +151,64 @@ export default async function AppDashboardPage() {
               </Link>
             </div>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {(favoriteBoards.length ? favoriteBoards : recentBoards.slice(0, 4)).map((board, index) => (
-                <Link
-                  key={board.id}
-                  href={`/boards/${board.slug}`}
-                  className="stagger-rise hover-lift rounded-[1.5rem] border border-white/10 p-5"
-                  style={{ background: board.background ?? '#17325d', animationDelay: `${index * 90 + 220}ms` }}
-                >
-                  <p className="text-sm uppercase tracking-[0.25em] text-white/60">Board</p>
-                  <p className="mt-3 text-2xl font-semibold">{board.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-white/76">{board.description ?? 'Sem descricao.'}</p>
-                </Link>
-              ))}
+              {highlightedBoards.length ? (
+                highlightedBoards.map((board, index) => (
+                  <Link
+                    key={board.id}
+                    href={`/boards/${board.slug}`}
+                    className="app-stagger hover-lift spotlight-card rounded-[1.5rem] border border-white/10 p-5"
+                    style={{ background: board.background ?? '#17325d', animationDelay: `${index * 70 + 180}ms` }}
+                  >
+                    <p className="text-sm uppercase tracking-[0.25em] text-white/60">Board</p>
+                    <p className="mt-3 text-2xl font-semibold">{board.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-white/76">{board.description ?? 'Sem descricao.'}</p>
+                  </Link>
+                ))
+              ) : (
+                <div className="empty-glow app-rise md:col-span-2 rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-sm text-white/50">
+                  <div className="empty-orbit mx-auto mb-5 grid h-24 w-24 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+                    <span className="text-3xl">▦</span>
+                  </div>
+                  <p className="font-medium text-white/78">Nenhum board ativo ainda</p>
+                  <p className="mt-2 leading-6">Crie o primeiro board em um workspace para começar a preencher seu painel.</p>
+                  <Link href="/workspaces" className="micro-bounce mt-5 inline-flex rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-white/78 transition hover:bg-white/[0.1] hover:text-white">
+                    Ir para workspaces
+                  </Link>
+                </div>
+              )}
             </div>
           </Card>
 
-          <Card className="fade-up border-white/10 bg-[linear-gradient(180deg,rgba(10,17,30,0.92),rgba(8,13,24,0.82))] text-white" style={{ animationDelay: '220ms' }}>
+          <Card className="fade-up app-panel border-white/10 bg-[linear-gradient(180deg,rgba(10,17,30,0.92),rgba(8,13,24,0.82))] text-white" style={{ animationDelay: '220ms' }}>
             <p className="text-sm text-white/45">Estrutura</p>
             <h2 className="mt-1 text-2xl font-semibold">Seus espacos</h2>
             <div className="mt-5 space-y-3">
-              {memberships.map(({ workspace }, index) => (
-                <Link
-                  key={workspace.id}
-                  href={`/workspaces/${workspace.slug}`}
-                  className="stagger-rise flex items-center justify-between rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-4 transition hover:bg-white/[0.08]"
-                  style={{ animationDelay: `${index * 80 + 260}ms` }}
-                >
-                  <div>
-                    <p className="font-medium">{workspace.name}</p>
-                    <p className="mt-1 text-sm text-white/55">{workspace.boards.length} boards ativos</p>
+              {memberships.length ? (
+                memberships.map(({ workspace }, index) => (
+                  <Link
+                    key={workspace.id}
+                    href={`/workspaces/${workspace.slug}`}
+                    className="app-stagger micro-bounce flex items-center justify-between rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-4 transition hover:bg-white/[0.08]"
+                    style={{ animationDelay: `${index * 60 + 200}ms` }}
+                  >
+                    <div>
+                      <p className="font-medium">{workspace.name}</p>
+                      <p className="mt-1 text-sm text-white/55">{workspace.boards.length} boards ativos</p>
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-black/15 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/45">
+                      {workspace.visibility}
+                    </span>
+                  </Link>
+                ))
+              ) : (
+                <div className="empty-glow app-rise rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-sm text-white/50">
+                  <div className="empty-orbit mx-auto mb-5 grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/[0.04]">
+                    <span className="text-2xl">◌</span>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-black/15 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/45">
-                    {workspace.visibility}
-                  </span>
-                </Link>
-              ))}
+                  <p className="font-medium text-white/78">Seu painel ainda nao tem espacos</p>
+                  <p className="mt-2 leading-6">Crie um workspace para separar operacoes, clientes ou frentes de produto.</p>
+                </div>
+              )}
             </div>
           </Card>
         </section>

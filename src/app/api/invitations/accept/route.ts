@@ -4,12 +4,12 @@ import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/prisma'
 
 const schema = z.object({
-  token: z.string(),
+  token: z.string().min(1),
 })
 
 export async function POST(request: Request) {
   const session = await auth()
-  if (!session?.user?.id) {
+  if (!session?.user?.id || !session.user.email) {
     return NextResponse.json({ error: 'Nao autenticado.' }, { status: 401 })
   }
 
@@ -25,6 +25,10 @@ export async function POST(request: Request) {
 
   if (!invitation) {
     return NextResponse.json({ error: 'Convite nao encontrado.' }, { status: 404 })
+  }
+
+  if (invitation.status !== 'PENDING') {
+    return NextResponse.json({ error: 'Esse convite nao esta mais disponivel.' }, { status: 409 })
   }
 
   if (invitation.expiresAt < new Date()) {
@@ -72,5 +76,13 @@ export async function POST(request: Request) {
     data: { status: 'ACCEPTED' },
   })
 
-  return NextResponse.json({ ok: true })
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: invitation.workspaceId },
+    select: { slug: true },
+  })
+
+  return NextResponse.json({
+    ok: true,
+    redirectTo: invitation.boardId ? '/app' : workspace ? `/workspaces/${workspace.slug}` : '/app',
+  })
 }

@@ -90,6 +90,7 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
   const [loading, setLoading] = useState(false)
 
   const generatedSlug = useMemo(() => slugify(form.slug || form.title), [form.slug, form.title])
+  const selectedTemplate = useMemo(() => boardTemplates.find((template) => template.id === form.templateId) ?? boardTemplates[0], [form.templateId])
   const favoriteBoardsCount = workspace.boards.filter((board) => board.isFavorite).length
   const currentUserRole = workspace.members.find((member) => member.id === currentUserId)?.role
   const canManage = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN'
@@ -401,6 +402,18 @@ export function WorkspaceDetailClient({ initialWorkspace, currentUserId }: { ini
                 </option>
               ))}
             </select>
+            <div className="rounded-[1.3rem] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-white/42">Template ativo</p>
+              <p className="mt-2 text-sm font-medium text-white">{selectedTemplate.name}</p>
+              <p className="mt-2 text-sm leading-6 text-white/55">{selectedTemplate.description}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedTemplate.lists.map((list) => (
+                  <span key={list} className="rounded-full border border-white/10 bg-black/15 px-3 py-1 text-xs text-white/65">
+                    {list}
+                  </span>
+                ))}
+              </div>
+            </div>
 
             <div className="grid grid-cols-5 gap-2">
               {boardPalettes.map((palette) => (

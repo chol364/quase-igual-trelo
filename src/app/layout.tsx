@@ -1,15 +1,17 @@
 import type { Metadata } from 'next'
-import { Plus_Jakarta_Sans, Space_Grotesk } from 'next/font/google'
+import { Manrope, Sora } from 'next/font/google'
 import { AppProviders } from '@/components/layout/providers'
 import './globals.css'
 
-const bodyFont = Plus_Jakarta_Sans({
+const bodyFont = Manrope({
   subsets: ['latin'],
+  display: 'swap',
   variable: '--font-body',
 })
 
-const displayFont = Space_Grotesk({
+const displayFont = Sora({
   subsets: ['latin'],
+  display: 'swap',
   variable: '--font-display',
 })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -19,6 +19,7 @@ async function readJsonSafely(response: Response) {
 
 export function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [form, setForm] = useState({
     name: '',
     username: '',
@@ -54,9 +55,10 @@ export function RegisterForm() {
         email: form.email,
         password: form.password,
         redirect: false,
+        callbackUrl: searchParams?.get('callbackUrl') ?? '/app',
       })
 
-      router.push('/app')
+      router.push(searchParams?.get('callbackUrl') ?? '/app')
       router.refresh()
     } catch {
       setError('Nao foi possivel comunicar com o servidor local.')
